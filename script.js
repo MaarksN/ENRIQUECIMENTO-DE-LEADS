@@ -188,9 +188,14 @@ const ALLOWED_CNAES = ['4511101', '4511102', '4511103', '4511104', '4511105', '4
 
         if (engine === 'gemini') {
             apiKey = GEMINI_API_KEY;
-            apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
             payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            if (schema) { payload.generationConfig = { responseMimeType: "application/json", responseSchema: schema }; }
+            if (schema) {
+                payload.generationConfig = {
+                    response_mime_type: "application/json",
+                    response_schema: schema
+                };
+            }
             headers = { 'Content-Type': 'application/json' };
         } else { // OpenAI
             apiKey = OPENAI_API_KEY;
