@@ -59,3 +59,25 @@ Você também pediu para automatizar os contatos. Dentro de um arquivo HTML, a f
 * **WhatsApp/Telefone:** Botões "Ligar" ou "Enviar WhatsApp" podem ser criados para iniciar a chamada ou abrir o WhatsApp com o número do lead.
 
 A automação completa (enviar e-mails e mensagens em massa sem intervenção manual) e a integração com APIs como **Apollo.io, Slack ou Jira** exigem serviços de terceiros e, obrigatoriamente, um **backend** para gerenciar essas operações de forma segura. O `script.js` possui um espaço reservado para a chave da Apollo, mas a chamada real a essa API deve ser feita a partir de um servidor para proteger sua chave e lidar com as políticas de segurança da web (CORS).
+
+## Publicando no GitHub Pages
+
+Se ao abrir o endereço da sua página você encontrar a mensagem **"404 There isn't a GitHub Pages site here"**, significa que o Pages ainda não está habilitado para o repositório. Para publicar este portal como um site estático:
+
+1. No GitHub, acesse as **Settings** do repositório.
+2. No menu lateral, clique em **Pages**.
+3. Em **Source**, escolha o branch que contém o arquivo `index.html` (geralmente `main`) e mantenha a opção `/ (root)`.
+4. Clique em **Save**. Após alguns instantes, o GitHub fornecerá a URL pública do site.
+
+Depois de configurado, basta atualizar os arquivos do repositório e o Pages será reconstruído automaticamente.
+
+## Executando o servidor de API local
+
+Este repositório acompanha um pequeno servidor Express com rotas de exemplo. Para utilizá-lo:
+
+```bash
+npm install
+npm start
+```
+
+O comando `npm test` atualmente apenas exibe uma mensagem padrão, pois não há testes automatizados.

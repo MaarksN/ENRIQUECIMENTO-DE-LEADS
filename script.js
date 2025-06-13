@@ -5,8 +5,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // para que as funcionalidades de IA funcionem.
     // Lembre-se: NÃO compartilhe este arquivo com as chaves preenchidas.
     // -----------------------------------------------------------------------------
-    const GEMINI_API_KEY = "AIzaSyDTzwUbOWORIM9NvLq2gnsR4gnppAkM-oI"; 
-    const OPENAI_API_KEY = "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";
+    const GEMINI_API_KEY = "SUA_CHAVE_GEMINI_AQUI";
+    const OPENAI_API_KEY = "SUA_CHAVE_OPENAI_AQUI";
+    const APOLLO_API_KEY = "SUA_CHAVE_APOLLO_AQUI"; // Chave para enriquecimento avançado
 
     // --- Data Storage and Management ---
     let groupsData = [];
@@ -70,9 +71,30 @@ document.addEventListener('DOMContentLoaded', () => {
         manualAddBtn: document.getElementById('manual-add-btn'),
         backupBtn: document.getElementById('backup-btn'),
         restoreInput: document.getElementById('restore-input'),
+        calendarContainer: document.getElementById('calendar-container'),
+        pomodoroDisplay: document.getElementById('pomodoro-display'),
+        startPomodoro: document.getElementById('start-pomodoro'),
+        stopPomodoro: document.getElementById('stop-pomodoro'),
+        resetPomodoro: document.getElementById('reset-pomodoro'),
+        musicPlayer: document.getElementById('music-player'),
+        quickInsightBtn: document.getElementById('quick-insight-btn'),
+        quickScriptBtn: document.getElementById('quick-script-btn'),
+        quickOutput: document.getElementById('quick-output'),
+        chatLauncher: document.getElementById('chat-launcher'),
+        floatingChat: document.getElementById('floating-chat'),
+        closeChatBtn: document.getElementById('close-chat-btn'),
+        floatingChatInput: document.getElementById('floating-chat-input'),
+        floatingChatHistory: document.getElementById('floating-chat-history'),
+        sendChatBtn: document.getElementById('send-chat-btn'),
+        rolePlayBtn: document.getElementById('roleplay-btn'),
+        chatbotTabs: document.querySelectorAll('#chatbot-tabs button'),
     };
 
-    const ALLOWED_CNAES = ['4511101', '4511102', '4511103', '4511104', '4511105', '4511106', '4512901', '4512902', '4541201', '4541203', '4541204', '7711000', '7719599'];
+const ALLOWED_CNAES = ['4511101', '4511102', '4511103', '4511104', '4511105', '4511106', '4512901', '4512902', '4541201', '4541203', '4541204', '7711000', '7719599'];
+
+    let currentChatEngine = 'gemini';
+    let pomodoroSeconds = 25 * 60;
+    let pomodoroInterval = null;
 
     const showToast = (message, isError = false) => {
         ui.toast.textContent = message;
@@ -539,6 +561,109 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     };
+
+    const updatePomodoroDisplay = () => {
+        const m = String(Math.floor(pomodoroSeconds / 60)).padStart(2, '0');
+        const s = String(pomodoroSeconds % 60).padStart(2, '0');
+        ui.pomodoroDisplay.textContent = `${m}:${s}`;
+    };
+
+    ui.startPomodoro.addEventListener('click', () => {
+        if (pomodoroInterval) return;
+        pomodoroInterval = setInterval(() => {
+            if (pomodoroSeconds > 0) {
+                pomodoroSeconds--;
+                updatePomodoroDisplay();
+            } else {
+                clearInterval(pomodoroInterval);
+                pomodoroInterval = null;
+                showToast('Pomodoro concluído!');
+            }
+        }, 1000);
+    });
+    ui.stopPomodoro.addEventListener('click', () => {
+        clearInterval(pomodoroInterval);
+        pomodoroInterval = null;
+    });
+    ui.resetPomodoro.addEventListener('click', () => {
+        clearInterval(pomodoroInterval);
+        pomodoroInterval = null;
+        pomodoroSeconds = 25 * 60;
+        updatePomodoroDisplay();
+    });
+    updatePomodoroDisplay();
+
+    const appendMessage = (role, text) => {
+        const div = document.createElement('div');
+        div.className = `chat-message ${role}`;
+        div.innerHTML = `<div class="bubble">${text}</div>`;
+        ui.floatingChatHistory.appendChild(div);
+        ui.floatingChatHistory.scrollTop = ui.floatingChatHistory.scrollHeight;
+    };
+
+    const updateLastBotMessage = (text) => {
+        const msgs = ui.floatingChatHistory.querySelectorAll('.chat-message.bot');
+        if (msgs.length) msgs[msgs.length - 1].innerHTML = `<div class="bubble">${text}</div>`;
+        ui.floatingChatHistory.scrollTop = ui.floatingChatHistory.scrollHeight;
+    };
+
+    ui.chatLauncher.addEventListener('click', () => {
+        ui.floatingChat.classList.toggle('show');
+    });
+    ui.closeChatBtn.addEventListener('click', () => {
+        ui.floatingChat.classList.remove('show');
+    });
+    ui.chatbotTabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            ui.chatbotTabs.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentChatEngine = btn.dataset.engine;
+        });
+    });
+
+    ui.sendChatBtn.addEventListener('click', async () => {
+        const text = ui.floatingChatInput.value.trim();
+        if (!text) return;
+        appendMessage('user', text);
+        ui.floatingChatInput.value = '';
+        appendMessage('bot', '<div class="loader-dark"></div>');
+        try {
+            const res = await callAIApi(currentChatEngine, text);
+            updateLastBotMessage(simpleMarkdownToHtml(res));
+        } catch (e) {
+            updateLastBotMessage('Erro: ' + e.message);
+        }
+    });
+
+    ui.rolePlayBtn.addEventListener('click', async () => {
+        const prompt = 'Vamos fazer um role play de vendas de carros. Você é o cliente e eu sou o vendedor. Comece a conversa em português.';
+        appendMessage('user', prompt);
+        appendMessage('bot', '<div class="loader-dark"></div>');
+        try {
+            const res = await callAIApi(currentChatEngine, prompt);
+            updateLastBotMessage(simpleMarkdownToHtml(res));
+        } catch (e) {
+            updateLastBotMessage('Erro: ' + e.message);
+        }
+    });
+
+    ui.quickInsightBtn.addEventListener('click', async () => {
+        ui.quickOutput.innerHTML = '<div class="loader-dark mx-auto"></div>';
+        const prompt = `Analise rapidamente estes leads e forneça 3 insights práticos: ${JSON.stringify(groupsData.slice(0,10))}`;
+        try {
+            const txt = await callAIApi('gemini', prompt);
+            ui.quickOutput.innerHTML = simpleMarkdownToHtml(txt);
+        } catch(e) { ui.quickOutput.innerHTML = 'Erro: ' + e.message; }
+    });
+
+    ui.quickScriptBtn.addEventListener('click', async () => {
+        ui.quickOutput.innerHTML = '<div class="loader-dark mx-auto"></div>';
+        const prompt = 'Crie um script curto de ligação e uma mensagem de e-mail para oferecer os serviços da Auto Arremate.';
+        try {
+            const txt = await callAIApi('gemini', prompt);
+            ui.quickOutput.innerHTML = simpleMarkdownToHtml(txt);
+        } catch(e) { ui.quickOutput.innerHTML = 'Erro: ' + e.message; }
+    });
 
     // --- Initial Load ---
     dataStore.load();

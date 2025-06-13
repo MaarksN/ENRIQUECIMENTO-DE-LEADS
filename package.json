@@ -1,0 +1,14 @@
+{
+  "name": "lead-enrichment-api",
+  "version": "1.0.0",
+  "description": "API server with placeholder endpoints for lead automation",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
