@@ -19,16 +19,17 @@ Este é um portal completo de prospecção e gerenciamento de leads, construído
 
 Para que a aplicação funcione corretamente, você **PRECISA** inserir suas chaves de API.
 
-1. **Abra o arquivo `script.js`** em um editor de texto (como Bloco de Notas, VS Code, etc.).
-2. **Localize as seguintes linhas** no topo do arquivo:
+1. Copie o arquivo `apiKeys.example.js` para `apiKeys.js`.
+2. Abra o novo arquivo `apiKeys.js` e preencha as chaves conforme abaixo:
    ```javascript
-   const GEMINI_API_KEY = "SUA_CHAVE_GEMINI_AQUI"; 
-   const OPENAI_API_KEY = "SUA_CHAVE_OPENAI_AQUI";
-   const APOLLO_API_KEY = "SUA_CHAVE_APOLLO_AQUI"; // Chave para enriquecimento avançado
+   window.API_KEYS = {
+     GEMINI_API_KEY: "SUA_CHAVE_GEMINI_AQUI",
+     OPENAI_API_KEY: "SUA_CHAVE_OPENAI_AQUI",
+     APOLLO_API_KEY: "SUA_CHAVE_APOLLO_AQUI"
+   };
    ```
-3. **Substitua** `"SUA_CHAVE_GEMINI_AQUI"`, `"SUA_CHAVE_OPENAI_AQUI"` e `"SUA_CHAVE_APOLLO_AQUI"` pelas suas chaves de API correspondentes.
-4. Salve o arquivo `script.js`.
-5. Abra o arquivo `index.html` no seu navegador.
+3. Salve o arquivo e **não** o envie para repositórios públicos (ele está listado no `.gitignore`).
+4. Abra `index.html` no navegador para usar o portal.
 
 ### ⚠️ AVISO DE SEGURANÇA
 

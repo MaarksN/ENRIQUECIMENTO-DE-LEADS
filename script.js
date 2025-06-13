@@ -5,9 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // para que as funcionalidades de IA funcionem.
     // Lembre-se: NÃO compartilhe este arquivo com as chaves preenchidas.
     // -----------------------------------------------------------------------------
-    const GEMINI_API_KEY = "SUA_CHAVE_GEMINI_AQUI";
-    const OPENAI_API_KEY = "SUA_CHAVE_OPENAI_AQUI";
-    const APOLLO_API_KEY = "SUA_CHAVE_APOLLO_AQUI"; // Chave para enriquecimento avançado
+    const {
+        GEMINI_API_KEY = "SUA_CHAVE_GEMINI_AQUI",
+        OPENAI_API_KEY = "SUA_CHAVE_OPENAI_AQUI",
+        APOLLO_API_KEY = "SUA_CHAVE_APOLLO_AQUI"
+    } = window.API_KEYS || {};
 
     // --- Data Storage and Management ---
     let groupsData = [];
