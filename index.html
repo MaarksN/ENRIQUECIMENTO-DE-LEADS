@@ -105,6 +105,33 @@
                 </div>
             </div>
 
+            <div class="dashboard-card lg:col-span-3">
+                <h2 class="text-2xl font-bold text-slate-900 mb-4">Agenda e Calendário</h2>
+                <div id="calendar-container"></div>
+            </div>
+
+            <div class="dashboard-card">
+                <h2 class="text-2xl font-bold text-slate-900 mb-4">Pomodoro & Música</h2>
+                <div id="pomodoro-display">25:00</div>
+                <div class="flex gap-2 mb-4">
+                    <button id="start-pomodoro" class="bg-green-600 text-white px-3 py-1 rounded">Iniciar</button>
+                    <button id="stop-pomodoro" class="bg-red-600 text-white px-3 py-1 rounded">Parar</button>
+                    <button id="reset-pomodoro" class="bg-gray-300 px-3 py-1 rounded">Resetar</button>
+                </div>
+                <audio id="music-player" controls class="w-full">
+                    <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+                </audio>
+            </div>
+
+            <div class="dashboard-card">
+                <h2 class="text-2xl font-bold text-slate-900 mb-4">Insights & Scripts</h2>
+                <div class="flex flex-col gap-2">
+                    <button id="quick-insight-btn" class="bg-indigo-600 text-white rounded-md py-2">Gerar Insights</button>
+                    <button id="quick-script-btn" class="bg-green-600 text-white rounded-md py-2">Gerar Script de Ligação e Email</button>
+                    <div id="quick-output" class="mt-2 prose-custom text-sm"></div>
+                </div>
+            </div>
+
         </div>
     </main>
 
@@ -112,6 +139,23 @@
         <div id="modal-content" class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col transform transition-all"></div>
     </div>
     <div id="toast-notification" class="toast"></div>
+    <div id="chat-launcher"><i class="fas fa-comments"></i></div>
+    <div id="floating-chat">
+        <div class="chat-header">
+            <span>Chat IA</span>
+            <button id="close-chat-btn">&times;</button>
+        </div>
+        <div id="chatbot-tabs" class="flex text-white bg-blue-600">
+            <button data-engine="gemini" class="active">Gemini</button>
+            <button data-engine="openai">ChatGPT</button>
+        </div>
+        <div id="floating-chat-history" class="chat-body"></div>
+        <div class="chat-footer">
+            <textarea id="floating-chat-input" rows="2" placeholder="Digite sua mensagem..."></textarea>
+            <button id="send-chat-btn" class="bg-blue-600 text-white px-3 py-1 rounded">Enviar</button>
+        </div>
+        <button id="roleplay-btn" class="bg-amber-500 text-white m-2 px-3 py-1 rounded">🎭 Role Play</button>
+    </div>
     <script src="script.js"></script>
     
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
