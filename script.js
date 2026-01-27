@@ -15,16 +15,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const dataStore = {
         load: () => {
+            // Pillar 1 - Item 2: Decryption on Load
             const storedGroups = localStorage.getItem('vendasIA_groups');
             const storedAgenda = localStorage.getItem('vendasIA_agenda');
-            groupsData = storedGroups ? JSON.parse(storedGroups) : [];
+
+            let loadedGroups = storedGroups ? JSON.parse(storedGroups) : [];
+
+            // Decrypt sensitive fields
+            groupsData = loadedGroups.map(group => {
+                return {
+                    ...group,
+                    mainPhone: SecurityManager.decrypt(group.mainPhone),
+                    primaryEmail: SecurityManager.decrypt(group.primaryEmail)
+                };
+            });
+
             agendaData = storedAgenda ? JSON.parse(storedAgenda) : {};
         },
         save: () => {
-            localStorage.setItem('vendasIA_groups', JSON.stringify(groupsData));
+            // Pillar 1 - Item 2: Encryption on Save
+            const encryptedGroups = groupsData.map(group => {
+                return {
+                    ...group,
+                    mainPhone: SecurityManager.encrypt(group.mainPhone),
+                    primaryEmail: SecurityManager.encrypt(group.primaryEmail)
+                };
+            });
+
+            localStorage.setItem('vendasIA_groups', JSON.stringify(encryptedGroups));
             localStorage.setItem('vendasIA_agenda', JSON.stringify(agendaData));
         },
         backup: () => {
+            SecurityManager.logAction('BACKUP', 'User initiated data backup');
             const dataStr = JSON.stringify({ groups: groupsData, agenda: agendaData }, null, 2);
             const blob = new Blob([dataStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -76,6 +98,11 @@ document.addEventListener('DOMContentLoaded', () => {
         searchQuantity: document.getElementById('search-quantity'),
         searchLeadsBtn: document.getElementById('search-leads-btn'),
         leadSearchResults: document.getElementById('lead-search-results'),
+        loginModal: document.getElementById('login-modal'),
+        loginBtn: document.getElementById('login-btn'),
+        securityBtn: document.getElementById('security-dashboard-btn'),
+        securityModal: document.getElementById('security-modal'),
+        logoutBtn: document.getElementById('logout-btn'),
     };
 
     const ALLOWED_CNAES = ['4511101', '4511102', '4511103', '4511104', '4511105', '4511106', '4512901', '4512902', '4541201', '4541203', '4541204', '7711000', '7719599'];
@@ -300,6 +327,14 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     };
     const enrichLead = (group) => {
+        // Pillar 1 - Item 8: Automatic Backup/Versioning
+        if (!group.history) group.history = [];
+        group.history.push({
+            timestamp: new Date().toISOString(),
+            dataSnapshot: JSON.parse(JSON.stringify(group.enrichmentData || {}))
+        });
+        SecurityManager.logAction('ENRICH', `Enriching data for ${group.groupName}`);
+
         const prompt = `You are a B2B data enrichment specialist. For the Brazilian automotive group '${group.groupName}', find and return: main physical address, a primary contact phone number, official website, a general contact email, URL of their blog if available, and a list of up to 3 key decision makers (name, role, linkedin URL). Return null for any fields you cannot find. Do not invent data.`;
         const schema = {type: "OBJECT", properties: { "address": { "type": "STRING", "nullable": true }, "phone": { "type": "STRING", "nullable": true }, "website": { "type": "STRING", "nullable": true }, "primaryEmail": { "type": "STRING", "nullable": true }, "blogUrl": { "type": "STRING", "nullable": true }, "decisionMakers": { "type": "ARRAY", items: { "type": "OBJECT", properties: { "name": { "type": "STRING" }, "role": { "type": "STRING" }, "linkedin": { "type": "STRING", "nullable": true } } } } } };
         return generateAndRender('enrich-lead-btn', 'ai-enrichment-container', group, 'enrichmentData', prompt, schema, renderEnrichmentData);
@@ -400,6 +435,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!sector || !location) { showToast('Informe setor e localização.', true); return; }
         if (quantity > 10) { showToast('Máximo de 10 leads por busca.', true); return; }
 
+        SecurityManager.logAction('SEARCH_AI', `Searching ${quantity} leads in ${sector}/${location}`);
+
         searchBtn.disabled = true;
         searchBtn.innerHTML = '<div class="loader-dark mx-auto"></div>';
         resultsDiv.innerHTML = '';
@@ -483,6 +520,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         groupsData.unshift(newGroup);
+        SecurityManager.logAction('ADD_LEAD', `Added lead from AI Search: ${newGroup.groupName}`);
         dataStore.save();
         renderGroups(groupsData);
         prepareChartData();
@@ -506,6 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         groupsData.unshift(newGroup);
+        SecurityManager.logAction('ADD_LEAD', `Manually added lead: ${name}`);
         dataStore.save();
         renderGroups(groupsData);
         prepareChartData();
@@ -518,14 +557,76 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Init & Event Listeners ---
     const initializeApp = () => {
+        // Pillar 1 - Item 7: PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./service-worker.js')
+                .then(() => console.log('Service Worker Registered'))
+                .catch((err) => console.error('Service Worker Error', err));
+        }
+
+        // Wait for login
+        ui.loginModal.classList.remove('hidden');
+    };
+
+    const handleLogin = () => {
+        const username = document.getElementById('login-username').value.trim();
+        const role = document.getElementById('login-role').value;
+        if (!username) { showToast('Digite um nome de usuário.', true); return; }
+
+        const user = SecurityManager.login(username, role);
+        ui.loginModal.classList.add('hidden');
+        ui.logoutBtn.classList.remove('hidden');
+        showToast(`Bem-vindo, ${user.name}! (${user.role === 'admin' ? 'Administrador' : 'Vendedor'})`);
+
+        // Pillar 1 - Item 3: RBAC UI Adjustments
+        if (SecurityManager.hasPermission('admin')) {
+            ui.securityBtn.classList.remove('hidden');
+        } else {
+            ui.securityBtn.classList.add('hidden');
+            ui.backupBtn.style.display = 'none'; // Hide backup for non-admins
+        }
+
         renderGroups(groupsData);
         prepareChartData();
         renderCalendar(new Date().getFullYear(), new Date().getMonth());
+    };
+
+    const renderAuditLogs = () => {
+        const logs = SecurityManager.getAuditLogs();
+        const tbody = document.getElementById('audit-log-body');
+        tbody.innerHTML = logs.map(log => `
+            <tr>
+                <td class="px-3 py-2 whitespace-nowrap text-xs text-slate-500">${new Date(log.timestamp).toLocaleString()}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-xs font-medium text-slate-900">${log.user}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-xs text-slate-500">${log.action}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-xs text-slate-500 truncate max-w-xs" title="${log.details}">${log.details}</td>
+            </tr>
+        `).join('');
+    };
+
+    const handleLGPDCleanup = () => {
+        const email = document.getElementById('lgpd-email').value.trim();
+        if(!email) return;
+        try {
+            const count = SecurityManager.forgetData(email);
+            dataStore.save();
+            renderGroups(groupsData);
+            showToast(`LGPD: ${count} registros anonimizados.`);
+            renderAuditLogs(); // Update logs
+        } catch (e) {
+            showToast(e.message, true);
+        }
     };
     
     ui.consultBtn.addEventListener('click', consultLeadData);
     ui.searchLeadsBtn.addEventListener('click', searchLeadsWithAI);
     ui.manualAddBtn.addEventListener('click', addManualLead);
+    ui.loginBtn.addEventListener('click', handleLogin);
+    ui.logoutBtn.addEventListener('click', SecurityManager.logout);
+    ui.securityBtn.addEventListener('click', () => { ui.securityModal.classList.remove('hidden'); ui.securityModal.classList.add('flex'); renderAuditLogs(); });
+    document.getElementById('close-security-btn').addEventListener('click', () => { ui.securityModal.classList.add('hidden'); ui.securityModal.classList.remove('flex'); });
+    document.getElementById('lgpd-forget-btn').addEventListener('click', handleLGPDCleanup);
+
     ui.searchInput.addEventListener('input', (e) => { renderGroups(groupsData.filter(g => g.groupName.toLowerCase().includes(e.target.value.toLowerCase()))); });
     ui.modalContainer.addEventListener('click', (e) => { if(e.target === ui.modalContainer) { closeModal(); } });
     ui.backupBtn.addEventListener('click', dataStore.backup);
