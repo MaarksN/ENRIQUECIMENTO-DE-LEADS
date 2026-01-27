@@ -5,14 +5,25 @@ const SecurityManager = {
     // 1. Mock Authentication & Multi-Tenancy
     login: (username, role) => {
         const orgId = role === 'admin' ? 'org_hq' : 'org_branch_01'; // Simulate Tenant
+        // Pillar 1 - Item 1: Multi-Tenant Architecture (Simulated via OrgID)
         SecurityManager.currentUser = {
             id: 'user_' + Math.random().toString(36).substr(2, 9),
             name: username,
             role: role,
             orgId: orgId
         };
-        SecurityManager.logAction('LOGIN', `User ${username} logged in as ${role}`);
+        SecurityManager.logAction('LOGIN_ATTEMPT', `User ${username} attempting login as ${role}`);
         return SecurityManager.currentUser;
+    },
+
+    // Pillar 1 - Item 2: Auth0 / Firebase Auth with 2FA (Simulated)
+    verify2FA: (code) => {
+        if (code === '123456') {
+            SecurityManager.logAction('LOGIN_SUCCESS', `User ${SecurityManager.currentUser.name} passed 2FA`);
+            return true;
+        }
+        SecurityManager.logAction('LOGIN_FAILURE', `User ${SecurityManager.currentUser.name} failed 2FA`);
+        return false;
     },
 
     logout: () => {
@@ -76,6 +87,30 @@ const SecurityManager = {
         if (!SecurityManager.currentUser) return false;
         if (SecurityManager.currentUser.role === 'admin') return true;
         return SecurityManager.currentUser.role === requiredRole;
+    },
+
+    // Pillar 1 - Item 4: API Gateway (Reverse Proxy Simulation)
+    secureFetch: async (url, options) => {
+        // Gateway Logic: Check Authentication
+        if (!SecurityManager.currentUser) {
+            SecurityManager.logAction('GATEWAY_BLOCK', `Unauthenticated access attempt to ${url}`);
+            throw new Error("API Gateway: Access Denied (Unauthenticated)");
+        }
+
+        // Gateway Logic: Rate Limiting / Logging
+        SecurityManager.logAction('GATEWAY_REQUEST', `Proxying request to ${url} for Org ${SecurityManager.currentUser.orgId}`);
+
+        // Gateway Logic: Forward Request (In real world, this would inject server-side secrets)
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                 SecurityManager.captureException(new Error(`API Error: ${response.statusText}`), { url });
+            }
+            return response;
+        } catch (error) {
+            SecurityManager.captureException(error, { url });
+            throw error;
+        }
     },
 
     // 5. Global Error Monitoring (Mock Sentry)

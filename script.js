@@ -213,11 +213,12 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error(`Chave de API para ${engine} não foi configurada.`);
         }
 
-        const response = await fetch(apiUrl, { method: 'POST', headers: headers, body: JSON.stringify(payload) });
+        // Pillar 1 - Item 4: API Gateway (Simulated)
+        const response = await SecurityManager.secureFetch(apiUrl, { method: 'POST', headers: headers, body: JSON.stringify(payload) });
         if (!response.ok) { 
             const errorBody = await response.text();
             console.error("API Error Response:", errorBody);
-            throw new Error(`API Error (${engine}): ${response.statusText || 'Something went wrong'}`); 
+            throw new Error(`API Error (${engine}): ${response.statusText || 'Erro Desconhecido'}`);
         }
         
         const result = await response.json();
@@ -573,12 +574,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const role = document.getElementById('login-role').value;
         if (!username) { showToast('Digite um nome de usuário.', true); return; }
 
-        const user = SecurityManager.login(username, role);
-        ui.loginModal.classList.add('hidden');
-        ui.logoutBtn.classList.remove('hidden');
-        showToast(`Bem-vindo, ${user.name}! (${user.role === 'admin' ? 'Administrador' : 'Vendedor'})`);
+        SecurityManager.login(username, role);
 
-        // Pillar 1 - Item 3: RBAC UI Adjustments
+        // Pillar 1 - Item 2: 2FA Challenge
+        const code = prompt("🔐 Autenticação de Dois Fatores (2FA)\n\nSimulação: Digite o código enviado para seu celular (Use '123456'):");
+
+        if (SecurityManager.verify2FA(code)) {
+            ui.loginModal.classList.add('hidden');
+            ui.logoutBtn.classList.remove('hidden');
+            const user = SecurityManager.currentUser;
+            showToast(`Bem-vindo, ${user.name}! (${user.role === 'admin' ? 'Administrador' : 'Vendedor'})`);
+
+            // Pillar 1 - Item 3: RBAC UI Adjustments
+            if (SecurityManager.hasPermission('admin')) {
+                ui.securityBtn.classList.remove('hidden');
+            } else {
+                ui.securityBtn.classList.add('hidden');
+                ui.backupBtn.style.display = 'none'; // Hide backup for non-admins
+            }
+
+            renderGroups(groupsData);
+            prepareChartData();
+            renderCalendar(new Date().getFullYear(), new Date().getMonth());
+        } else {
+            showToast('❌ Falha na Autenticação 2FA. Código inválido.', true);
+            SecurityManager.logout(); // Reset state
+        }
+    };
         if (SecurityManager.hasPermission('admin')) {
             ui.securityBtn.classList.remove('hidden');
         } else {
