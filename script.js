@@ -85,27 +85,118 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput: document.getElementById('searchInput'),
         modalContainer: document.getElementById('modal-container'),
         modalContent: document.getElementById('modal-content'),
-        marketSummaryBtn: document.getElementById('generate-market-summary-btn'),
-        marketSummaryContainer: document.getElementById('market-summary-container'),
-        toast: document.getElementById('toast-notification'),
-        consultBtn: document.getElementById('consult-cnpj-btn'),
-        consultationResult: document.getElementById('consultation-result'),
-        manualAddBtn: document.getElementById('manual-add-btn'),
-        backupBtn: document.getElementById('backup-btn'),
-        restoreInput: document.getElementById('restore-input'),
+        // Dashboard Elements (New Layout)
+        kpiTotalLeads: document.getElementById('kpi-total-leads'),
+        kpiCompanies: document.getElementById('kpi-companies'),
+
+        // Search & Maps
         searchSector: document.getElementById('search-sector'),
         searchLocation: document.getElementById('search-location'),
-        searchQuantity: document.getElementById('search-quantity'),
+        searchSize: document.getElementById('search-size'),
         searchLeadsBtn: document.getElementById('search-leads-btn'),
         leadSearchResults: document.getElementById('lead-search-results'),
+        mapPinsLayer: document.getElementById('map-pins-layer'),
+        mapPlaceholder: document.getElementById('map-placeholder-text'),
+
+        // Legacy/Modals
+        toast: document.getElementById('toast-notification'),
+        manualAddBtn: document.getElementById('manual-add-btn'),
         loginModal: document.getElementById('login-modal'),
         loginBtn: document.getElementById('login-btn'),
         securityBtn: document.getElementById('security-dashboard-btn'),
         securityModal: document.getElementById('security-modal'),
         logoutBtn: document.getElementById('logout-btn'),
+
+        // User Profile
+        userNameDisplay: document.getElementById('user-name-display'),
+        userRoleDisplay: document.getElementById('user-role-display'),
+        userAvatar: document.getElementById('user-avatar'),
     };
 
     const ALLOWED_CNAES = ['4511101', '4511102', '4511103', '4511104', '4511105', '4511106', '4512901', '4512902', '4541201', '4541203', '4541204', '7711000', '7719599'];
+
+    // Pilar 3: Inteligência Artificial Aplicada
+    const AIEngine = {
+        // Item 21: Scoring Preditivo
+        calculateLeadScore: (lead) => {
+            let score = 50; // Base score
+            if (lead.mainWebsite) score += 20;
+            if (lead.mainPhone) score += 10;
+            if (lead.cnae && ALLOWED_CNAES.includes(lead.cnae.replace(/\D/g, ''))) score += 20;
+            if (lead.trafficEstimate && lead.trafficEstimate.includes('Alto')) score += 10;
+            if (lead.techStack && lead.techStack.length > 0) score += 10;
+            if (lead.hasWhatsApp) score += 5;
+
+            // Penalidades
+            if (!lead.mainPhone && !lead.mainWebsite) score -= 30;
+
+            return Math.max(0, Math.min(100, score));
+        },
+
+        // Item 22: Análise de Sentimento de Reviews
+        analyzeReviewSentiment: async (companyName) => {
+            const prompt = `Analise 5 reviews fictícios recentes da empresa "${companyName}" e liste 3 principais reclamações ou dores dos clientes. Retorne apenas uma lista em HTML (<ul>).`;
+            return await callAIApi('gemini', prompt);
+        },
+
+        // Item 23: Hiper-Personalização de Cold Mail
+        generateColdMailHook: async (lead) => {
+            const prompt = `Escreva apenas a primeira frase de um email frio para a empresa "${lead.groupName}". Contexto: Setor automotivo, focando em eficiência. Tom: Profissional e admirado.`;
+            return await callAIApi('gemini', prompt);
+        },
+
+        // Item 24: Categorização Visual (Computer Vision Simulado)
+        categorizeStorefront: async (imageUrl) => {
+            // Simulação de chamada Vision
+            SecurityManager.logAction('AI_VISION', `Analyzing image: ${imageUrl}`);
+            return new Promise(resolve => setTimeout(() => resolve("Loja de Médio Padrão - Fachada Moderna"), 1000));
+        },
+
+        // Item 25: Recomendador de Objeções (RAG Simulado)
+        predictObjections: async (sector) => {
+            const baseObjections = "Preço alto, falta de tempo, fidelidade ao concorrente";
+            const prompt = `Baseado nestas objeções comuns: "${baseObjections}", gere um script curto de contorno para o setor "${sector}".`;
+            return await callAIApi('gemini', prompt);
+        },
+
+        // Item 26: Resumo de Notícias (Simulado)
+        fetchCompanyNews: async (companyName) => {
+            // Simulação de NewsAPI
+            return [
+                { title: `${companyName} expande operações no sul`, date: '2 dias atrás' },
+                { title: `Setor automotivo cresce 5% e beneficia ${companyName}`, date: '1 semana atrás' }
+            ];
+        },
+
+        // Item 27: Transcrição e Análise de Calls (Whisper Simulado + Gemini)
+        analyzeCallAudio: async (file) => {
+            SecurityManager.logAction('AI_AUDIO', `Analyzing audio file: ${file.name}`);
+            // Mock Transcrição
+            const transcription = "Cliente: Gostaria de saber o preço. Vendedor: Temos planos flexíveis. Cliente: Preciso aprovar com a diretoria.";
+            // Análise BANT via Gemini
+            const prompt = `Analise esta transcrição de venda: "${transcription}". Extraia o BANT (Budget, Authority, Need, Timing) em formato JSON.`;
+            const schema = { type: "OBJECT", properties: { "Budget": { "type": "STRING" }, "Authority": { "type": "STRING" }, "Need": { "type": "STRING" }, "Timing": { "type": "STRING" } } };
+            return await callAIApi('gemini', prompt, schema);
+        },
+
+        // Item 29: Gerador de Conteúdo para LinkedIn
+        generateLinkedInComment: async (postTopic) => {
+            const prompt = `Gere um comentário curto e profissional para um post no LinkedIn sobre "${postTopic}". Concorde com o ponto e adicione um insight sobre tecnologia.`;
+            return await callAIApi('gemini', prompt);
+        },
+
+        // Item 30: Matching de Decisores
+        matchDecisionMakers: async (cnpjData) => {
+            if (!cnpjData || !cnpjData.qsa) return [];
+            // Simulação de busca no LinkedIn baseada no QSA da BrasilAPI (se disponível) ou nomes fictícios
+            const names = cnpjData.qsa ? cnpjData.qsa.map(s => s.nome) : ["Sócio Administrador"];
+            return names.map(name => ({
+                name: name,
+                linkedinUrl: `https://linkedin.com/in/${name.replace(/\s+/g, '-').toLowerCase()}`,
+                matchConfidence: "Alto"
+            }));
+        }
+    };
 
     // Pilar 2: Motor de Aquisição de Dados
     const DataAcquisition = {
@@ -207,11 +298,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderGroups = (groups) => {
         ui.groupGrid.innerHTML = '';
-        if (groups.length === 0) { ui.groupGrid.innerHTML = `<p class="text-slate-500 col-span-full text-center">Nenhum lead no diretório.</p>`; return; }
+
+        // Update Dashboard KPIs
+        if(ui.kpiTotalLeads) ui.kpiTotalLeads.textContent = groups.length;
+        if(ui.kpiCompanies) ui.kpiCompanies.textContent = groups.filter(g => g.cnae).length;
+
+        if (groups.length === 0) { ui.groupGrid.innerHTML = `<p class="text-slate-500 col-span-full text-center py-10">Nenhum lead no diretório.</p>`; return; }
         groups.forEach(group => {
             const card = document.createElement('div');
-            card.className = 'bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between';
-            card.innerHTML = `<div><h3 class="font-bold text-lg text-slate-900 truncate">${group.groupName}</h3><p class="text-sm text-slate-500">${group.mainPhone ? '📞 ' + group.mainPhone : ' '}</p></div><div class="mt-4 text-right"><span class="text-sm font-medium text-blue-600">Ver detalhes &rarr;</span></div>`;
+            // Enhanced "Clean" Card Style
+            card.className = 'glass-card p-6 rounded-2xl cursor-pointer hover-lift flex flex-col justify-between h-48 border-l-4 border-indigo-500';
+            card.innerHTML = `
+                <div>
+                    <div class="flex justify-between items-start">
+                        <h3 class="font-bold text-lg text-slate-800 truncate pr-2">${group.groupName}</h3>
+                        <span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded-full">${group.cnae ? '🏢' : '👤'}</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2 flex items-center gap-1">${group.mainPhone ? '📞 ' + group.mainPhone : '📞 N/A'}</p>
+                    <p class="text-xs text-slate-500 mt-1 flex items-center gap-1">${group.mainWebsite ? '🌐 ' + group.mainWebsite : '🌐 N/A'}</p>
+                </div>
+                <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
+                    <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">Score: ${group.score || AIEngine.calculateLeadScore(group)}</span>
+                    <span class="text-xs font-medium text-slate-400">Ver detalhes &rarr;</span>
+                </div>`;
             card.addEventListener('click', () => openModal(group));
             ui.groupGrid.appendChild(card);
         });
@@ -229,6 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button data-tab="prospeccao" class="tab-button active">Prospecção</button>
                         <button data-tab="analise" class="tab-button">Análise</button>
                         <button data-tab="dados-avancados" class="tab-button">Dados Avançados (Pilar 2)</button>
+                        <button data-tab="ia-avancada" class="tab-button">IA Aplicada (Pilar 3)</button>
                     </nav>
                 </div>
                 <div id="tab-content-prospeccao" class="tab-content active"><div id="sales-kit-container" class="space-y-6"><button id="generate-sales-kit-btn" class="inline-flex items-center gap-x-2 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">🚀 Gerar Kit de Prospecção</button><div id="sales-kit-content" class="mt-4 prose-custom max-w-none"></div></div></div>
@@ -257,8 +367,92 @@ document.addEventListener('DOMContentLoaded', () => {
         handleCachedData(group, 'strategicAnalysis', 'ai-analysis-container', 'generate-ai-analysis-btn', renderStrategicSummary, generateStrategicSummary);
         handleCachedData(group, 'competitorAnalysis', 'ai-competitor-container', 'competitor-analysis-btn', renderCompetitors, generateCompetitorAnalysis);
 
-        // Renderizar dados avançados (Pilar 2) automaticamente
+        // Renderizar dados avançados (Pilar 2) e IA (Pilar 3) automaticamente
         renderAdvancedData(group);
+        renderAIData(group);
+    };
+
+    const renderAIData = (group) => {
+        const container = document.getElementById('ai-engine-content');
+        if (!container) return;
+
+        // Calcular Score (Item 21)
+        const score = AIEngine.calculateLeadScore(group);
+        let scoreColor = score > 70 ? 'text-green-600' : (score > 40 ? 'text-yellow-600' : 'text-red-600');
+
+        container.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Score Card -->
+                <div class="bg-white border rounded-lg p-4 shadow-sm">
+                    <h3 class="font-bold text-slate-800 mb-2">Scoring Preditivo (Item 21)</h3>
+                    <div class="flex items-center gap-4">
+                        <div class="text-4xl font-extrabold ${scoreColor}">${score}/100</div>
+                        <div class="text-sm text-slate-500">Probabilidade de conversão baseada em ${Object.keys(group).length} pontos de dados.</div>
+                    </div>
+                </div>
+
+                <!-- Cold Mail Hook (Item 23) -->
+                <div class="bg-white border rounded-lg p-4 shadow-sm">
+                    <h3 class="font-bold text-slate-800 mb-2">Hook de Email (Item 23)</h3>
+                    <div id="cold-mail-hook-content" class="text-sm italic text-slate-600 border-l-4 border-blue-400 pl-3">Gerando personalização...</div>
+                </div>
+
+                <!-- Objeções (Item 25) -->
+                <div class="bg-white border rounded-lg p-4 shadow-sm md:col-span-2">
+                    <h3 class="font-bold text-slate-800 mb-2">Previsão de Objeções (Item 25)</h3>
+                    <div id="objection-content" class="text-sm text-slate-600">Analisando padrão do setor...</div>
+                </div>
+
+                <!-- Decisores & LinkedIn (Item 30) -->
+                <div class="bg-white border rounded-lg p-4 shadow-sm md:col-span-2">
+                    <h3 class="font-bold text-slate-800 mb-2">Matching de Decisores (Item 30)</h3>
+                    <div id="decision-makers-content" class="space-y-2">
+                        <p class="text-slate-500 text-sm">Buscando sócios na base fiscal...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Async Generations
+        if (!group.coldMailHook) {
+            AIEngine.generateColdMailHook(group).then(res => {
+                group.coldMailHook = res;
+                const el = document.getElementById('cold-mail-hook-content');
+                if(el) el.innerHTML = `"${res}"`;
+            });
+        } else {
+            const el = document.getElementById('cold-mail-hook-content');
+            if(el) el.innerHTML = `"${group.coldMailHook}"`;
+        }
+
+        if (!group.predictedObjections) {
+            AIEngine.predictObjections(group.cnae || "Automotivo").then(res => {
+                group.predictedObjections = res;
+                const el = document.getElementById('objection-content');
+                if(el) el.innerHTML = simpleMarkdownToHtml(res);
+            });
+        } else {
+            const el = document.getElementById('objection-content');
+            if(el) el.innerHTML = simpleMarkdownToHtml(group.predictedObjections);
+        }
+
+        // Matching Decisores (Item 30)
+        AIEngine.matchDecisionMakers(group.cnpjData).then(decisores => {
+            const el = document.getElementById('decision-makers-content');
+            if(el && decisores.length > 0) {
+                el.innerHTML = decisores.map(d => `
+                    <div class="flex justify-between items-center bg-slate-50 p-2 rounded border">
+                        <div>
+                            <p class="font-semibold text-sm">${d.name}</p>
+                            <p class="text-xs text-slate-500">Confiança: ${d.matchConfidence}</p>
+                        </div>
+                        <a href="${d.linkedinUrl}" target="_blank" class="text-blue-600 hover:text-blue-800"><i class="fab fa-linkedin fa-lg"></i></a>
+                    </div>
+                `).join('');
+            } else if (el) {
+                el.innerHTML = '<p class="text-sm text-slate-400">Nenhum decisor mapeado via CNPJ.</p>';
+            }
+        });
     };
 
     const renderAdvancedData = (group) => {
@@ -731,16 +925,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (SecurityManager.verify2FA(code)) {
             ui.loginModal.classList.add('hidden');
-            ui.logoutBtn.classList.remove('hidden');
+            // ui.logoutBtn.classList.remove('hidden'); // Legacy
             const user = SecurityManager.currentUser;
             showToast(`Bem-vindo, ${user.name}! (${user.role === 'admin' ? 'Administrador' : 'Vendedor'})`);
 
+            // UI Profile Updates (New)
+            if(ui.userNameDisplay) ui.userNameDisplay.textContent = user.name;
+            if(ui.userRoleDisplay) ui.userRoleDisplay.textContent = user.role === 'admin' ? 'Administrador' : 'Vendedor';
+
             // Pillar 1 - Item 3: RBAC UI Adjustments
             if (SecurityManager.hasPermission('admin')) {
-                ui.securityBtn.classList.remove('hidden');
+                if(ui.securityBtn) ui.securityBtn.classList.remove('hidden');
             } else {
-                ui.securityBtn.classList.add('hidden');
-                ui.backupBtn.style.display = 'none'; // Hide backup for non-admins
+                if(ui.securityBtn) ui.securityBtn.classList.add('hidden');
+                if(ui.backupBtn) ui.backupBtn.style.display = 'none'; // Hide backup for non-admins
             }
 
             renderGroups(groupsData);
@@ -750,17 +948,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('❌ Falha na Autenticação 2FA. Código inválido.', true);
             SecurityManager.logout(); // Reset state
         }
-    };
-        if (SecurityManager.hasPermission('admin')) {
-            ui.securityBtn.classList.remove('hidden');
-        } else {
-            ui.securityBtn.classList.add('hidden');
-            ui.backupBtn.style.display = 'none'; // Hide backup for non-admins
-        }
-
-        renderGroups(groupsData);
-        prepareChartData();
-        renderCalendar(new Date().getFullYear(), new Date().getMonth());
     };
 
     const renderAuditLogs = () => {
@@ -789,15 +976,20 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(e.message, true);
         }
     };
+
+    // Event Listeners (Defensive)
+    if(ui.consultBtn) ui.consultBtn.addEventListener('click', consultLeadData);
+    if(ui.searchLeadsBtn) ui.searchLeadsBtn.addEventListener('click', searchLeadsWithAI);
+    if(ui.manualAddBtn) ui.manualAddBtn.addEventListener('click', addManualLead);
+    if(ui.loginBtn) ui.loginBtn.addEventListener('click', handleLogin);
+    if(ui.logoutBtn) ui.logoutBtn.addEventListener('click', SecurityManager.logout);
+    if(ui.securityBtn) ui.securityBtn.addEventListener('click', () => { ui.securityModal.classList.remove('hidden'); ui.securityModal.classList.add('flex'); renderAuditLogs(); });
+
+    const closeSecurity = document.getElementById('close-security-btn');
+    if(closeSecurity) closeSecurity.addEventListener('click', () => { ui.securityModal.classList.add('hidden'); ui.securityModal.classList.remove('flex'); });
     
-    ui.consultBtn.addEventListener('click', consultLeadData);
-    ui.searchLeadsBtn.addEventListener('click', searchLeadsWithAI);
-    ui.manualAddBtn.addEventListener('click', addManualLead);
-    ui.loginBtn.addEventListener('click', handleLogin);
-    ui.logoutBtn.addEventListener('click', SecurityManager.logout);
-    ui.securityBtn.addEventListener('click', () => { ui.securityModal.classList.remove('hidden'); ui.securityModal.classList.add('flex'); renderAuditLogs(); });
-    document.getElementById('close-security-btn').addEventListener('click', () => { ui.securityModal.classList.add('hidden'); ui.securityModal.classList.remove('flex'); });
-    document.getElementById('lgpd-forget-btn').addEventListener('click', handleLGPDCleanup);
+    const lgpdBtn = document.getElementById('lgpd-forget-btn');
+    if(lgpdBtn) lgpdBtn.addEventListener('click', handleLGPDCleanup);
 
     // Scraper Simulation Integration
     document.getElementById('run-scraper-btn').addEventListener('click', () => {
@@ -805,12 +997,90 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = DataAcquisition.scrapeLinkedIn(text);
 
         // Auto-fill manual entry form
-        document.getElementById('manual-name').value = data.company !== "Não identificado" ? data.company : "";
+        // Check if manual-name exists (it might be hidden in new layout sections)
+        const nameInput = document.getElementById('manual-name');
+        if(nameInput) {
+             nameInput.value = data.company !== "Não identificado" ? data.company : "";
+             // Switch to Directory view to see form
+             document.querySelector('[data-section="directory"]').click();
+        }
 
         document.getElementById('scraper-modal').classList.add('hidden');
         showToast(`Dados extraídos: ${data.name} (${data.role})`);
         SecurityManager.logAction('SCRAPER', `Imported data for ${data.name} from text snippet`);
     });
+
+    // Audio Analysis Integration (Item 27) - Defensive check if element exists
+    const analyzeBtn = document.getElementById('analyze-call-btn');
+    if (analyzeBtn) {
+        analyzeBtn.addEventListener('click', () => {
+            const fileInput = document.getElementById('call-upload');
+            const resultContainer = document.getElementById('call-analysis-result');
+
+            if (fileInput.files.length === 0) {
+                showToast('Selecione um arquivo de áudio.', true);
+                return;
+            }
+
+            const file = fileInput.files[0];
+            resultContainer.innerHTML = '<div class="loader-dark mx-auto"></div>';
+            resultContainer.classList.remove('hidden');
+
+            AIEngine.analyzeCallAudio(file).then(analysis => {
+                let parsed = analysis;
+                if (typeof analysis === 'string') {
+                    try { parsed = JSON.parse(analysis); } catch(e) { parsed = { "Raw": analysis }; }
+                }
+
+                let html = '<h4 class="font-bold mb-1">Análise BANT:</h4><ul class="list-disc pl-4">';
+                for (const [key, value] of Object.entries(parsed)) {
+                    html += `<li><strong>${key}:</strong> ${value}</li>`;
+                }
+                html += '</ul>';
+                resultContainer.innerHTML = html;
+                showToast('Call analisada com sucesso!');
+            }).catch(err => {
+                resultContainer.innerHTML = `<p class="text-red-500">Erro na análise: ${err.message}</p>`;
+            });
+        });
+    }
+
+    // Map Pins Logic
+    const renderMapPins = (leads) => {
+        if(!ui.mapPinsLayer) return;
+        ui.mapPinsLayer.innerHTML = '';
+        if(leads.length === 0) {
+            if(ui.mapPlaceholder) ui.mapPlaceholder.style.display = 'flex';
+            return;
+        }
+        if(ui.mapPlaceholder) ui.mapPlaceholder.style.display = 'none';
+
+        // Mock coordinates around São Paulo for demo
+        leads.forEach((lead, i) => {
+            const top = 20 + (Math.random() * 60); // %
+            const left = 20 + (Math.random() * 60); // %
+
+            const pin = document.createElement('div');
+            pin.className = 'map-pin';
+            pin.style.top = `${top}%`;
+            pin.style.left = `${left}%`;
+
+            const tooltip = document.createElement('div');
+            tooltip.className = 'pin-tooltip';
+            tooltip.textContent = lead.groupName;
+
+            pin.appendChild(tooltip);
+            pin.addEventListener('click', () => openModal(lead));
+            ui.mapPinsLayer.appendChild(pin);
+        });
+    };
+
+    // Update Search Logic to trigger Map Render
+    const originalRenderSearchResults = renderSearchResults;
+    renderSearchResults = (results) => {
+        originalRenderSearchResults(results);
+        renderMapPins(results);
+    };
 
     ui.searchInput.addEventListener('input', (e) => { renderGroups(groupsData.filter(g => g.groupName.toLowerCase().includes(e.target.value.toLowerCase()))); });
     ui.modalContainer.addEventListener('click', (e) => { if(e.target === ui.modalContainer) { closeModal(); } });
