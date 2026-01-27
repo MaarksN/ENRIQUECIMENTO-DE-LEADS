@@ -71,6 +71,11 @@ document.addEventListener('DOMContentLoaded', () => {
         manualAddBtn: document.getElementById('manual-add-btn'),
         backupBtn: document.getElementById('backup-btn'),
         restoreInput: document.getElementById('restore-input'),
+        searchSector: document.getElementById('search-sector'),
+        searchLocation: document.getElementById('search-location'),
+        searchQuantity: document.getElementById('search-quantity'),
+        searchLeadsBtn: document.getElementById('search-leads-btn'),
+        leadSearchResults: document.getElementById('lead-search-results'),
     };
 
     const ALLOWED_CNAES = ['4511101', '4511102', '4511103', '4511104', '4511105', '4511106', '4512901', '4512902', '4541201', '4541203', '4541204', '7711000', '7719599'];
@@ -385,6 +390,105 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const searchLeadsWithAI = async () => {
+        const sector = ui.searchSector.value.trim();
+        const location = ui.searchLocation.value.trim();
+        const quantity = parseInt(ui.searchQuantity.value) || 5;
+        const resultsDiv = ui.leadSearchResults;
+        const searchBtn = ui.searchLeadsBtn;
+
+        if (!sector || !location) { showToast('Informe setor e localização.', true); return; }
+        if (quantity > 10) { showToast('Máximo de 10 leads por busca.', true); return; }
+
+        searchBtn.disabled = true;
+        searchBtn.innerHTML = '<div class="loader-dark mx-auto"></div>';
+        resultsDiv.innerHTML = '';
+
+        const prompt = `Find and list ${quantity} real companies in the sector "${sector}" located in "${location}". For each company, provide: Name, Phone (if available), Website (if available), and Address. Return a JSON array of objects with keys: name, phone, website, address. Do not invent companies, only list real ones you know of.`;
+        const schema = {
+            type: "ARRAY",
+            items: {
+                type: "OBJECT",
+                properties: {
+                    name: { type: "STRING" },
+                    phone: { type: "STRING", nullable: true },
+                    website: { type: "STRING", nullable: true },
+                    address: { type: "STRING", nullable: true }
+                },
+                required: ["name"]
+            }
+        };
+
+        try {
+            const results = await callAIApi('gemini', prompt, schema);
+            renderSearchResults(results);
+        } catch (error) {
+            console.error('Lead search error:', error);
+            resultsDiv.innerHTML = `<p class="text-red-500 text-sm">Erro na busca: ${error.message}</p>`;
+        } finally {
+            searchBtn.disabled = false;
+            searchBtn.innerHTML = '✨ Buscar Novos Leads';
+        }
+    };
+
+    const renderSearchResults = (results) => {
+        const resultsDiv = ui.leadSearchResults;
+        if (!results || results.length === 0) {
+            resultsDiv.innerHTML = '<p class="text-slate-500 text-sm">Nenhum lead encontrado.</p>';
+            return;
+        }
+
+        resultsDiv.innerHTML = results.map((lead, index) => `
+            <div class="border rounded-md p-3 text-sm bg-slate-50 flex justify-between items-start">
+                <div>
+                    <h4 class="font-bold text-slate-800">${lead.name}</h4>
+                    ${lead.phone ? `<p class="text-slate-600">📞 ${lead.phone}</p>` : ''}
+                    ${lead.website ? `<p class="text-slate-600">🌐 ${lead.website}</p>` : ''}
+                    ${lead.address ? `<p class="text-slate-500 text-xs mt-1">📍 ${lead.address}</p>` : ''}
+                </div>
+                <button class="add-searched-lead-btn text-green-600 hover:text-green-800 p-1" data-index="${index}" title="Adicionar ao Diretório">
+                    <i class="fas fa-plus-circle fa-lg"></i>
+                </button>
+            </div>
+        `).join('');
+
+        // Store results temporarily to access them when adding
+        ui.leadSearchResults.dataset.lastResults = JSON.stringify(results);
+
+        resultsDiv.querySelectorAll('.add-searched-lead-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const index = e.currentTarget.dataset.index;
+                const results = JSON.parse(ui.leadSearchResults.dataset.lastResults);
+                addSearchedLeadToDirectory(results[index]);
+                e.currentTarget.parentElement.classList.add('opacity-50', 'pointer-events-none');
+                e.currentTarget.innerHTML = '<i class="fas fa-check"></i>';
+            });
+        });
+    };
+
+    const addSearchedLeadToDirectory = (lead) => {
+         const newGroup = {
+            id: crypto.randomUUID(),
+            groupName: lead.name,
+            mainPhone: lead.phone,
+            mainWebsite: lead.website,
+            enrichmentData: { address: lead.address }, // Pre-fill enrichment data
+            pdvs: [],
+            createdAt: new Date().toISOString()
+        };
+
+        if (groupsData.some(g => g.groupName.toLowerCase() === newGroup.groupName.toLowerCase())) {
+            showToast('Este grupo já existe no diretório.', true);
+            return;
+        }
+
+        groupsData.unshift(newGroup);
+        dataStore.save();
+        renderGroups(groupsData);
+        prepareChartData();
+        showToast(`Grupo "${newGroup.groupName}" adicionado!`, false);
+    };
+
     const addManualLead = () => {
         const name = document.getElementById('manual-name').value.trim();
         const phone = document.getElementById('manual-phone').value.trim();
@@ -420,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     ui.consultBtn.addEventListener('click', consultLeadData);
+    ui.searchLeadsBtn.addEventListener('click', searchLeadsWithAI);
     ui.manualAddBtn.addEventListener('click', addManualLead);
     ui.searchInput.addEventListener('input', (e) => { renderGroups(groupsData.filter(g => g.groupName.toLowerCase().includes(e.target.value.toLowerCase()))); });
     ui.modalContainer.addEventListener('click', (e) => { if(e.target === ui.modalContainer) { closeModal(); } });
