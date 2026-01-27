@@ -15,6 +15,30 @@ Este é um portal completo de prospecção e gerenciamento de leads, construído
 - **Backup e Restauração:** Faça o backup de seus dados para um arquivo local e restaure-os quando necessário.
 - **Persistência de Dados:** Todas as informações são salvas automaticamente no `localStorage` do seu navegador.
 
+## 🔐 Pilar 1: Infraestrutura & Segurança
+
+A plataforma agora conta com uma camada de segurança simulada para demonstrar arquitetura empresarial:
+
+1.  **Autenticação Multi-Tenant:** Sistema de login com isolamento de dados por Organização.
+    *   **Usuário de Teste:** Digite qualquer nome (ex: `Tester`).
+    *   **Papéis (RBAC):** Escolha entre `Admin` (Acesso Total) ou `Vendedor` (Limitado).
+    *   **2FA (Simulado):** Ao logar, um prompt pedirá um código. **Use o código `123456`**.
+2.  **Criptografia:** Dados sensíveis (Email, Telefone) são criptografados antes de serem salvos no `localStorage`.
+3.  **Logs de Auditoria:** Todas as ações críticas (Login, Exportação, Enriquecimento) são registradas e visíveis no Painel de Segurança (apenas Admins).
+4.  **Conformidade LGPD:** Ferramenta "Esquecer Dados" para anonimizar registros de um email específico.
+
+## 📡 Pilar 2: Motor de Aquisição de Dados
+
+Novas ferramentas para capturar e validar dados de leads:
+
+1.  **Validação de CNPJ (BrasilAPI):** Consulta em tempo real na Receita Federal para validar status e CNAE.
+2.  **Importador de Dados (Scraper Simulado):** Modal "Importar" que aceita texto copiado do LinkedIn ou vagas de emprego e extrai automaticamente Nome, Cargo e Empresa.
+3.  **Enriquecimento Avançado:**
+    *   **Tech Stack:** Simulação de detecção de tecnologias (VTEX, Salesforce, etc.).
+    *   **Tráfego Web:** Estimativa de visitas mensais.
+    *   **Domínio:** Verificação de idade do domínio (Whois).
+    *   **Validação de Contato:** Verificação de formato e probabilidade de WhatsApp.
+
 ## 🚀 Configuração Rápida (MUITO IMPORTANTE)
 
 Para que a aplicação funcione corretamente, você **PRECISA** inserir suas chaves de API.
