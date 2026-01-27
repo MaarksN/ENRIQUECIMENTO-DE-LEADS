@@ -67,8 +67,9 @@
                     <input type="text" id="manual-name" class="block w-full rounded-md border-slate-300 shadow-sm" placeholder="Nome do Grupo">
                     <input type="text" id="manual-phone" class="block w-full rounded-md border-slate-300 shadow-sm" placeholder="Telefone Principal">
                     <input type="text" id="manual-website" class="block w-full rounded-md border-slate-300 shadow-sm" placeholder="Website">
-                    <div class="text-center">
+                    <div class="flex gap-2 justify-center">
                         <button id="manual-add-btn" class="inline-flex items-center gap-x-2 rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">Adicionar Lead</button>
+                        <button onclick="document.getElementById('scraper-modal').classList.remove('hidden'); document.getElementById('scraper-modal').classList.add('flex');" class="inline-flex items-center gap-x-2 rounded-md bg-slate-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-500" title="Importar via Scraper">📥 Importar</button>
                     </div>
                  </div>
             </div>
@@ -142,6 +143,7 @@
             <div class="text-center mb-6">
                 <h2 class="text-2xl font-bold text-slate-900">Acesso Seguro</h2>
                 <p class="text-sm text-slate-500">Pilar 1: Infraestrutura e Segurança</p>
+                <p class="text-xs text-slate-400 mt-1">Plataforma em Português (Brasil)</p>
             </div>
             <div class="space-y-4">
                  <div>
@@ -156,6 +158,19 @@
                     </select>
                  </div>
                  <button id="login-btn" class="w-full rounded-md bg-blue-600 px-4 py-2 text-white font-semibold shadow-sm hover:bg-blue-500">Entrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scraper Import Modal -->
+    <div id="scraper-modal" class="fixed inset-0 bg-black bg-opacity-60 z-[52] hidden items-center justify-center p-4" role="dialog" aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+            <h3 class="text-lg font-bold mb-4">Importar Dados (Scraper Simulado)</h3>
+            <p class="text-sm text-slate-600 mb-4">Cole o texto copiado do perfil do LinkedIn ou da vaga para extrair dados.</p>
+            <textarea id="scraper-input" class="w-full border rounded p-2 text-sm h-32 mb-4" placeholder="Ex: Nome: João Silva&#10;Cargo: Gerente de Compras&#10;Empresa: Auto Arremate"></textarea>
+            <div class="flex justify-end gap-2">
+                <button onclick="document.getElementById('scraper-modal').classList.add('hidden')" class="px-3 py-1.5 rounded border">Cancelar</button>
+                <button id="run-scraper-btn" class="px-3 py-1.5 rounded bg-blue-600 text-white font-semibold">Processar</button>
             </div>
         </div>
     </div>
