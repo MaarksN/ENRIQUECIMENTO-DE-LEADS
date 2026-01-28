@@ -1,0 +1,9 @@
+{
+  "name": "SALES PROSPECTOR AI INTELLIGENCE",
+  "description": "SaaS de inteligência de vendas com enriquecimento de dados via IA, validação de CNPJ e automação de prospecção.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "geolocation"
+  ]
+}
