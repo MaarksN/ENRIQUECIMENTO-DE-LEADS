@@ -9,6 +9,8 @@ import AILab from './AILab';
 import { Lead } from './types';
 import useLocalStorage from './src/hooks/useLocalStorage';
 
+const ToolsHub = React.lazy(() => import('./src/components/ToolsHub'));
+
 // Mock Data for Initial State
 const MOCK_LEADS: Lead[] = [
   {
@@ -37,7 +39,7 @@ const MOCK_LEADS: Lead[] = [
 
 const App: React.FC = () => {
   const [darkMode, setDarkMode] = useState(false);
-  const [view, setView] = useState<'dashboard' | 'leads' | 'validation' | 'ailab'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'leads' | 'validation' | 'ailab' | 'tools'>('dashboard');
   const [leads, setLeads] = useLocalStorage<Lead[]>('leads_db', MOCK_LEADS);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -159,6 +161,13 @@ const App: React.FC = () => {
             >
                 <Icons.Lab /> {!collapsed && 'Laboratório IA'}
             </button>
+            <button
+                onClick={() => setView('tools')}
+                title="100 Power Tools"
+                className={`group flex items-center ${collapsed ? 'justify-center p-3' : 'gap-4 w-full px-6 py-4'} text-base font-bold rounded-3xl transition-all duration-300 ${view === 'tools' ? 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-lg shadow-cyan-500/30 transform scale-105' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800 hover:pl-7'} ${collapsed ? 'hover:pl-0 hover:scale-110' : ''}`}
+            >
+                <Icons.Sparkles /> {!collapsed && '100 Power Tools'}
+            </button>
             <button 
                 onClick={() => setView('validation')}
                 title="Validação CNPJ"
@@ -208,9 +217,14 @@ const App: React.FC = () => {
           )}
           {view === 'ailab' && <AILab />}
           {view === 'validation' && <CNPJValidator />}
+          {view === 'tools' && (
+             <React.Suspense fallback={<div className="p-10 text-center text-slate-500">Carregando Ferramentas...</div>}>
+                 <ToolsHub />
+             </React.Suspense>
+          )}
 
           {/* 404 Fallback */}
-          {!['dashboard', 'leads', 'ailab', 'validation'].includes(view) && (
+          {!['dashboard', 'leads', 'ailab', 'validation', 'tools'].includes(view) && (
             <div className="text-center p-20">
                <div className="text-6xl mb-4">😕</div>
                <h2 className="text-3xl font-bold mb-6 dark:text-white">Página não encontrada</h2>
