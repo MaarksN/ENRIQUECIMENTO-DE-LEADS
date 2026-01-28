@@ -44,6 +44,9 @@
                 <a href="#" data-section="cadence" class="nav-item flex items-center px-4 py-3 text-sm font-medium rounded-xl text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors group">
                     <span class="text-xl mr-3 group-hover:scale-110 transition-transform">📅</span> Cadência
                 </a>
+                <a href="#" data-section="agent" class="nav-item flex items-center px-4 py-3 text-sm font-medium rounded-xl text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 transition-colors group mt-4 border border-emerald-100">
+                    <span class="text-xl mr-3 group-hover:scale-110 transition-transform">🤖</span> Hunter AI
+                </a>
             </nav>
 
             <div class="p-4 border-t border-slate-100 space-y-3">
@@ -243,6 +246,83 @@
                     </div>
                 </section>
 
+                <!-- SECTION: HUNTER AGENT -->
+                <section id="section-agent" class="hidden space-y-6 animate-fade-in">
+                    <!-- Control Center -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Left: Configuration -->
+                        <div class="glass-card p-6 rounded-2xl bg-slate-900 text-white border-slate-700">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="font-bold text-xl text-white flex items-center gap-2">🤖 Agente Autônomo</h3>
+                                <span id="agent-status-badge" class="px-2 py-1 rounded text-xs font-bold bg-slate-600">IDLE</span>
+                            </div>
+
+                            <div class="space-y-4 mb-6">
+                                <div>
+                                    <label class="text-xs text-slate-400 font-bold uppercase">Segmento ICP (Etapa 1)</label>
+                                    <input type="text" id="agent-icp-segment" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white mt-1" value="Tecnologia B2B">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-400 font-bold uppercase">Região Alvo</label>
+                                    <input type="text" id="agent-icp-location" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white mt-1" value="São Paulo, SP">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-400 font-bold uppercase">Min Score (Qualificação)</label>
+                                    <input type="range" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer mt-2" min="0" max="100" value="70">
+                                </div>
+                            </div>
+
+                            <button id="agent-toggle-btn" class="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-lg transition-all" onclick="HunterAgent.toggle()">
+                                ▶ Iniciar Agente
+                            </button>
+                        </div>
+
+                        <!-- Center: Live Terminal -->
+                        <div class="glass-card p-0 rounded-2xl bg-black border-slate-800 overflow-hidden flex flex-col h-[400px] lg:h-auto font-mono">
+                            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
+                                <span class="text-xs text-slate-400">root@hunter-ai:~# ./prospect_loop.sh</span>
+                                <div class="flex gap-1.5">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                                    <div class="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+                                    <div class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                                </div>
+                            </div>
+                            <div class="p-4 overflow-y-auto flex-grow scrollbar-hide" id="agent-terminal-logs">
+                                <div class="text-xs text-slate-500 mb-2">System initialized. Waiting for command...</div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Opportunities Feed -->
+                        <div class="glass-card p-6 rounded-2xl bg-slate-100 border-slate-200 flex flex-col h-[400px] lg:h-auto">
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2">🔥 Oportunidades (Ready)</h3>
+                            <div class="overflow-y-auto flex-grow pr-2 space-y-3" id="agent-opportunity-feed">
+                                <!-- Feed Items Injected Here -->
+                                <p class="text-xs text-slate-400 text-center mt-10">Nenhuma oportunidade gerada ainda.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Row -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="glass-card p-4 rounded-xl flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-xl">⚡</div>
+                            <div><p class="text-xs text-slate-500 font-bold uppercase">Ciclos Hoje</p><h4 class="text-xl font-bold text-slate-800">42</h4></div>
+                        </div>
+                        <div class="glass-card p-4 rounded-xl flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xl">💎</div>
+                            <div><p class="text-xs text-slate-500 font-bold uppercase">Leads Qualificados</p><h4 class="text-xl font-bold text-slate-800">18</h4></div>
+                        </div>
+                        <div class="glass-card p-4 rounded-xl flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xl">💰</div>
+                            <div><p class="text-xs text-slate-500 font-bold uppercase">Pipeline Gerado</p><h4 class="text-xl font-bold text-slate-800">R$ 180k</h4></div>
+                        </div>
+                        <div class="glass-card p-4 rounded-xl flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-xl">⏱</div>
+                            <div><p class="text-xs text-slate-500 font-bold uppercase">Tempo/Lead</p><h4 class="text-xl font-bold text-slate-800">1.2m</h4></div>
+                        </div>
+                    </div>
+                </section>
+
             </div>
         </main>
     </div>
@@ -352,6 +432,7 @@
 
     <!-- Scripts -->
     <script src="security.js"></script>
+    <script src="agent.js"></script>
     <script src="script.js"></script>
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script>
@@ -363,7 +444,14 @@
                 e.preventDefault();
                 // Active State
                 document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active', 'bg-slate-50', 'text-indigo-600'));
-                item.classList.add('active', 'bg-slate-50', 'text-indigo-600');
+                item.classList.remove('active', 'bg-slate-50', 'text-indigo-600'); // Clean cleanup
+
+                // Specific styling for Agent tab vs others
+                if(item.dataset.section === 'agent') {
+                     item.classList.add('active', 'bg-emerald-100', 'text-emerald-900', 'border-emerald-200');
+                } else {
+                     item.classList.add('active', 'bg-slate-50', 'text-indigo-600');
+                }
 
                 // Show Section
                 const sectionId = item.dataset.section;
@@ -371,7 +459,13 @@
                 document.getElementById(`section-${sectionId}`).classList.remove('hidden');
 
                 // Update Title
-                const titles = { 'dashboard': 'Dashboard Geral', 'search': 'Busca Avançada & Mapas', 'directory': 'Diretório de Leads', 'cadence': 'Gestão de Cadência' };
+                const titles = {
+                    'dashboard': 'Dashboard Geral',
+                    'search': 'Busca Avançada & Mapas',
+                    'directory': 'Diretório de Leads',
+                    'cadence': 'Gestão de Cadência',
+                    'agent': 'Hunter AI - Agente Autônomo'
+                };
                 document.getElementById('page-title').textContent = titles[sectionId];
             });
         });

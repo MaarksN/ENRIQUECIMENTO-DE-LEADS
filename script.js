@@ -1769,6 +1769,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initial Load ---
     dataStore.load();
     initializeApp();
+    if(typeof HunterAgent !== 'undefined') HunterAgent.init();
 
     // Expose for Debugging/Verification
     window.UIUtils = UIUtils;
