@@ -82,82 +82,174 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- Data Storage and Management ---
-    let groupsData = [];
-    let agendaData = {};
-    let currentViewMode = 'list'; // 'list' or 'kanban'
+    // --- Data Storage and Management (Supabase Migration) ---
+    // Replaces legacy localStorage logic with Supabase Hooks pattern
 
-    // Filter & Sort State
-    let filterStartDate = null;
-    let filterEndDate = null;
-    let sortOrder = 'desc'; // 'desc' (score high->low) or 'asc'
-    let showArchived = false;
+    // Global State (Item 6: Zustand-like Store)
+    const store = {
+        state: {
+            user: null,
+            leads: [],
+            agenda: {},
+            viewMode: 'list',
+            filters: {
+                start: null,
+                end: null,
+                archived: false,
+                sort: 'desc'
+            }
+        },
+        listeners: [],
+        subscribe(listener) {
+            this.listeners.push(listener);
+        },
+        notify() {
+            this.listeners.forEach(l => l(this.state));
+        },
+        setState(newState) {
+            this.state = { ...this.state, ...newState };
+            this.notify();
+        }
+    };
+
+    // Legacy variables mapped to Store for compatibility
+    let groupsData = [];
+    // We update groupsData whenever store changes to keep legacy render functions working
+    store.subscribe((state) => { groupsData = state.leads; });
+
+    const useLeads = {
+        fetchLeads: async () => {
+            // Skeleton Loading (Item 8)
+            ui.groupGrid.innerHTML = UIUtils.renderSkeleton(4);
+
+            const { data: sessionData } = await window.supabase.auth.getSession();
+            if (!sessionData.session) return;
+
+            const { data, error } = await window.supabase
+                .from('leads')
+                .select('*')
+                .eq('user_id', sessionData.session.user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                UIUtils.showToast("Erro ao carregar leads: " + error.message, 'error');
+                return;
+            }
+
+            // Map DB columns back to App Internal Structure
+            const mappedLeads = data.map(dbLead => ({
+                ...dbLead.data, // Spread JSONB blob
+                id: dbLead.id,
+                groupName: dbLead.company_name,
+                cnae: dbLead.cnpj, // Storing simplified CNPJ/Cnae ref
+                score: dbLead.score,
+                createdAt: dbLead.created_at,
+                // Decrypt sensitive info on read (Pillar 1)
+                mainPhone: SecurityManager.decrypt(dbLead.data.mainPhone),
+                primaryEmail: SecurityManager.decrypt(dbLead.data.primaryEmail)
+            }));
+
+            store.setState({ leads: mappedLeads });
+            renderGroups(mappedLeads);
+        },
+
+        addLead: async (leadData) => {
+            const { data: sessionData } = await window.supabase.auth.getSession();
+            const user = sessionData.session?.user;
+            if (!user) return;
+
+            // Prepare for DB
+            const dbRow = {
+                user_id: user.id,
+                team_id: null, // Multi-tenancy placeholder
+                company_name: leadData.groupName,
+                cnpj: leadData.cnae,
+                sector: 'General', // Could extract
+                score: leadData.score || 0,
+                data: {
+                    ...leadData,
+                    // Encrypt sensitive info on write
+                    mainPhone: SecurityManager.encrypt(leadData.mainPhone),
+                    primaryEmail: SecurityManager.encrypt(leadData.primaryEmail)
+                }
+            };
+
+            const { data, error } = await window.supabase.from('leads').insert(dbRow);
+            if (!error) {
+                // Refresh local state optimistically or re-fetch
+                useLeads.fetchLeads();
+            }
+        },
+
+        updateLead: async (lead) => {
+             // Logic to update JSONB data in Supabase
+             // Simplified for prototype: we just re-save mostly
+             // Real impl would use .update().eq('id', lead.id)
+             console.log("Update lead logic would go here via Supabase");
+        }
+    };
+
+    // Item 2: Edge Function Proxy Simulation
+    const EdgeFunctions = {
+        callGemini: async (prompt) => {
+            const { data: sessionData } = await window.supabase.auth.getSession();
+            const user = sessionData.session?.user;
+
+            // Item 18: Stripe Subscription Check
+            if (user) {
+                const { data: settings } = await window.supabase.from('user_settings').select('*').eq('user_id', user.id);
+                const userSettings = settings?.[0];
+
+                if (!userSettings || userSettings.stripe_status !== 'active') {
+                    UIUtils.showToast("Funcionalidade bloqueada. Assinatura inativa.", 'error');
+                    throw new Error("Payment Required");
+                }
+
+                // Item 5: Context
+                var context = userSettings.ai_context;
+            }
+
+            const finalPrompt = `
+                CONTEXTO DO USUÁRIO:
+                ${context || 'Nenhum contexto definido.'}
+
+                TAREFA:
+                ${prompt}
+            `;
+
+            // Call Real API (or Mock) via "Edge"
+            // In a real scenario, this 'callAIApi' would fetch the Edge Function URL, not the external API directly
+            return await callAIApi('gemini', finalPrompt);
+        },
+
+        // Item 11 & 20: Integrations & Webhooks
+        syncHubSpot: async (lead) => {
+            // Simulate Edge Function call to HubSpot API
+            console.log(`[Edge] Syncing lead ${lead.groupName} to HubSpot...`);
+            await new Promise(r => setTimeout(r, 800));
+            UIUtils.showToast("Lead sincronizado com HubSpot!");
+        },
+
+        triggerWebhook: async (lead, event) => {
+            console.log(`[Edge] Triggering webhook for ${event}...`);
+            // fetch(WEBHOOK_URL, ...);
+        }
+    };
 
     const dataStore = {
-        load: () => {
-            // Pillar 1 - Item 2: Decryption on Load
-            const storedGroups = localStorage.getItem('vendasIA_groups');
-            const storedAgenda = localStorage.getItem('vendasIA_agenda');
-
-            let loadedGroups = storedGroups ? JSON.parse(storedGroups) : [];
-
-            // Decrypt sensitive fields
-            groupsData = loadedGroups.map(group => {
-                return {
-                    ...group,
-                    mainPhone: SecurityManager.decrypt(group.mainPhone),
-                    primaryEmail: SecurityManager.decrypt(group.primaryEmail)
-                };
-            });
-
-            agendaData = storedAgenda ? JSON.parse(storedAgenda) : {};
-        },
-        save: () => {
-            // Pillar 1 - Item 2: Encryption on Save
-            const encryptedGroups = groupsData.map(group => {
-                return {
-                    ...group,
-                    mainPhone: SecurityManager.encrypt(group.mainPhone),
-                    primaryEmail: SecurityManager.encrypt(group.primaryEmail)
-                };
-            });
-
-            localStorage.setItem('vendasIA_groups', JSON.stringify(encryptedGroups));
-            localStorage.setItem('vendasIA_agenda', JSON.stringify(agendaData));
-        },
+        load: () => { useLeads.fetchLeads(); },
+        save: () => { /* Now handled by Supabase inserts/updates */ },
         backup: () => {
             SecurityManager.logAction('BACKUP', 'User initiated data backup');
-            const dataStr = JSON.stringify({ groups: groupsData, agenda: agendaData }, null, 2);
+            const dataStr = JSON.stringify({ leads: store.state.leads }, null, 2);
             const blob = new Blob([dataStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `backup_portal_vendas_${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `backup_leads.json`;
             a.click();
-            URL.revokeObjectURL(url);
-            showToast('Backup realizado com sucesso!');
         },
-        restore: (file) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const data = JSON.parse(event.target.result);
-                    if (data.groups && data.agenda) {
-                        groupsData = data.groups;
-                        agendaData = data.agenda;
-                        dataStore.save();
-                        initializeApp();
-                        showToast('Backup restaurado com sucesso!');
-                    } else {
-                        showToast('Arquivo de backup inválido.', true);
-                    }
-                } catch (e) {
-                    showToast('Erro ao ler o arquivo de backup.', true);
-                    console.error("Restore error:", e);
-                }
-            };
-            reader.readAsText(file);
-        }
+        restore: (file) => { /* Restore logic would need to insert many rows to Supabase */ }
     };
 
     const ui = {
@@ -316,20 +408,25 @@ document.addEventListener('DOMContentLoaded', () => {
             ]), 800));
         },
 
-        // Item 14: Consulta CNPJ na Fonte (BrasilAPI - REAL)
+        // Item 4 & 14: Validação Real de CNPJ
         validateCNPJ: async (cnpj) => {
             const cleanCNPJ = cnpj.replace(/[^\d]/g, '');
             try {
                 SecurityManager.logAction('API_CALL', `BrasilAPI CNPJ Query: ${cleanCNPJ}`);
-                // Usando proxy ou chamada direta se CORS permitir. BrasilAPI geralmente permite.
                 const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCNPJ}`);
-                if (!res.ok) throw new Error('CNPJ não encontrado ou erro na API');
+                if (!res.ok) throw new Error('CNPJ não encontrado');
+
                 const data = await res.json();
+                // Expanded Data Return
                 return {
                     status: data.descricao_situacao_cadastral,
                     cnae: data.cnae_fiscal_principal_code,
                     razaoSocial: data.razao_social,
-                    municipio: data.municipio
+                    municipio: data.municipio,
+                    uf: data.uf,
+                    bairro: data.bairro,
+                    logradouro: data.logradouro,
+                    fullData: data // Keep for enrichment
                 };
             } catch (error) {
                 console.error("BrasilAPI Error", error);
@@ -1263,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Init & Event Listeners ---
-    const initializeApp = () => {
+    const initializeApp = async () => {
         // Pillar 1 - Item 7: PWA Service Worker Registration
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./service-worker.js')
@@ -1271,44 +1368,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 .catch((err) => console.error('Service Worker Error', err));
         }
 
-        // Wait for login
-        ui.loginModal.classList.remove('hidden');
+        // Check Supabase Session (Item 3)
+        const { data } = await window.supabase.auth.getSession();
+        if (data.session) {
+            handleSessionRestored(data.session);
+        } else {
+            ui.loginModal.classList.remove('hidden');
+        }
     };
 
-    const handleLogin = () => {
-        const username = document.getElementById('login-username').value.trim();
-        const role = document.getElementById('login-role').value;
-        if (!username) { showToast('Digite um nome de usuário.', true); return; }
+    const handleSessionRestored = (session) => {
+        ui.loginModal.classList.add('hidden');
+        const user = session.user;
 
-        SecurityManager.login(username, role);
+        // Populate User UI
+        if(ui.userNameDisplay) ui.userNameDisplay.textContent = user.email; // Using email as name for mock
+        if(ui.userRoleDisplay) ui.userRoleDisplay.textContent = user.role;
 
-        // Pillar 1 - Item 2: 2FA Challenge
+        // Fetch Data
+        useLeads.fetchLeads();
+        prepareChartData(); // Note: chart data might be empty initially until fetch completes
+        renderCalendar(new Date().getFullYear(), new Date().getMonth());
+
+        UIUtils.showToast(`Sessão restaurada: ${user.email}`);
+    };
+
+    const handleLogin = async () => {
+        const username = document.getElementById('login-username').value.trim(); // Treating as email
+
+        if (!username) { showToast('Digite um email.', true); return; }
+
+        // Item 3: Supabase Auth Login
+        const { data, error } = await window.supabase.auth.signInWithPassword({
+            email: username,
+            password: 'mock_password'
+        });
+
+        if (error) {
+            UIUtils.showToast("Falha no login: " + error.message, 'error');
+            return;
+        }
+
+        // Pillar 1 - Item 2: 2FA Challenge (Kept for security pillar requirements)
         const code = prompt("🔐 Autenticação de Dois Fatores (2FA)\n\nSimulação: Digite o código enviado para seu celular (Use '123456'):");
 
-        if (SecurityManager.verify2FA(code)) {
-            ui.loginModal.classList.add('hidden');
-            // ui.logoutBtn.classList.remove('hidden'); // Legacy
-            const user = SecurityManager.currentUser;
-            showToast(`Bem-vindo, ${user.name}! (${user.role === 'admin' ? 'Administrador' : 'Vendedor'})`);
-
-            // UI Profile Updates (New)
-            if(ui.userNameDisplay) ui.userNameDisplay.textContent = user.name;
-            if(ui.userRoleDisplay) ui.userRoleDisplay.textContent = user.role === 'admin' ? 'Administrador' : 'Vendedor';
-
-            // Pillar 1 - Item 3: RBAC UI Adjustments
-            if (SecurityManager.hasPermission('admin')) {
-                if(ui.securityBtn) ui.securityBtn.classList.remove('hidden');
-            } else {
-                if(ui.securityBtn) ui.securityBtn.classList.add('hidden');
-                if(ui.backupBtn) ui.backupBtn.style.display = 'none'; // Hide backup for non-admins
-            }
-
-            renderGroups(groupsData);
-            prepareChartData();
-            renderCalendar(new Date().getFullYear(), new Date().getMonth());
+        if (code === '123456') {
+            handleSessionRestored(data.session);
         } else {
-            showToast('❌ Falha na Autenticação 2FA. Código inválido.', true);
-            SecurityManager.logout(); // Reset state
+            showToast('❌ Falha na Autenticação 2FA.', true);
+            window.supabase.auth.signOut();
         }
     };
 
@@ -1512,7 +1620,43 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMapPins(results);
     };
 
-    if(ui.searchInput) ui.searchInput.addEventListener('input', (e) => { renderGroups(groupsData.filter(g => g.groupName.toLowerCase().includes(e.target.value.toLowerCase()))); });
+    if(ui.searchInput) {
+        // Item 7: Server-Side Search Integration
+        let debounceTimer;
+        ui.searchInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                const query = e.target.value;
+                if (!query) {
+                    useLeads.fetchLeads(); // Reset to all
+                    return;
+                }
+
+                ui.groupGrid.innerHTML = UIUtils.renderSkeleton(4);
+
+                const { data: sessionData } = await window.supabase.auth.getSession();
+                const { data, error } = await window.supabase
+                    .from('leads')
+                    .textSearch(query) // Use our new method
+                    .eq('user_id', sessionData.session.user.id);
+
+                if(!error) {
+                    const mapped = data.map(dbLead => ({
+                        ...dbLead.data,
+                        id: dbLead.id,
+                        groupName: dbLead.company_name,
+                        cnae: dbLead.cnpj,
+                        score: dbLead.score,
+                        createdAt: dbLead.created_at,
+                        mainPhone: SecurityManager.decrypt(dbLead.data.mainPhone),
+                        primaryEmail: SecurityManager.decrypt(dbLead.data.primaryEmail)
+                    }));
+                    store.setState({ leads: mapped });
+                    renderGroups(mapped);
+                }
+            }, 500);
+        });
+    }
     if(ui.modalContainer) ui.modalContainer.addEventListener('click', (e) => { if(e.target === ui.modalContainer) { closeModal(); } });
 
     // Backup/Restore buttons are currently not in UI, skipping listeners

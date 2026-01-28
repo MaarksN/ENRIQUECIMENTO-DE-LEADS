@@ -225,6 +225,25 @@ body {
     display: none;
 }
 
+/* Mobile Responsive Drawer (Item 10) */
+@media (max-width: 768px) {
+    aside {
+        position: fixed;
+        height: 100vh;
+        z-index: 50;
+        transform: translateX(-100%);
+    }
+    aside.open {
+        transform: translateX(0);
+    }
+    #main-scroll-area {
+        padding: 1rem !important;
+    }
+    .grid-cols-4, .grid-cols-3 {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 /* Print Mode (Item 47) */
 @media print {
   aside, button, input, .toast, .scroll-to-top, header, #directory-actions, #group-grid > div:not(.glass-card) { display: none !important; }

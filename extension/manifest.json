@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Sales Hunter AI",
+  "version": "1.0",
+  "permissions": ["activeTab", "scripting"],
+  "content_scripts": [{
+    "matches": ["https://www.linkedin.com/*"],
+    "js": ["content.js"]
+  }],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
