@@ -1,3 +1,14 @@
+// Item 41: Error Boundary (Global Handler)
+window.onerror = function(message, source, lineno, colno, error) {
+    console.error("Global Error Caught:", error);
+    const toast = document.getElementById('toast-notification');
+    if(toast) {
+        toast.textContent = "❌ Ocorreu um erro inesperado. Verifique o console.";
+        toast.className = "toast show error";
+        setTimeout(() => toast.classList.remove('show'), 5000);
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // -----------------------------------------------------------------------------
     // ATENÇÃO: INSIRA SUAS CHAVES DE API AQUI
@@ -9,9 +20,78 @@ document.addEventListener('DOMContentLoaded', () => {
     const OPENAI_API_KEY = "SUA_CHAVE_OPENAI_AQUI";
     const APOLLO_API_KEY = "SUA_CHAVE_APOLLO_AQUI"; // Chave para enriquecimento avançado
 
+    // --- UI Utilities (Chassis) ---
+    const UIUtils = {
+        showToast: (message, type = 'success', undoCallback = null) => {
+            const toast = document.getElementById('toast-notification');
+            toast.innerHTML = ''; // Clear content
+            toast.className = `toast show ${type === 'error' ? 'error' : ''}`;
+
+            const icon = type === 'error' ? '❌ ' : '✅ ';
+            const msgSpan = document.createElement('span');
+            msgSpan.textContent = icon + message;
+            toast.appendChild(msgSpan);
+
+            if (undoCallback) {
+                const undoBtn = document.createElement('button');
+                undoBtn.textContent = "Desfazer";
+                undoBtn.className = "ml-3 bg-white text-slate-800 px-2 py-1 rounded text-xs font-bold hover:bg-slate-100";
+                undoBtn.onclick = () => {
+                    undoCallback();
+                    toast.classList.remove('show');
+                };
+                toast.appendChild(undoBtn);
+            }
+
+            setTimeout(() => { toast.classList.remove('show'); }, 5000);
+        },
+
+        stringToColor: (str) => {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return `hsl(${hash % 360}, 70%, 50%)`;
+        },
+
+        formatCurrency: (value) => {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+        },
+
+        updateBreadcrumbs: (sectionId) => {
+            const breadcrumbs = document.getElementById('breadcrumbs');
+            const map = {
+                'dashboard': 'Home / Dashboard',
+                'search': 'Home / Busca & Mapas',
+                'directory': 'Home / Diretório',
+                'cadence': 'Home / Cadência'
+            };
+            if(breadcrumbs) breadcrumbs.textContent = map[sectionId] || 'Home';
+        },
+
+        renderSkeleton: (count = 3) => {
+            return Array(count).fill(0).map(() => `
+                <div class="glass-card p-6 rounded-2xl h-48 flex flex-col justify-between border-l-4 border-slate-200">
+                    <div class="space-y-3">
+                        <div class="skeleton h-6 w-3/4"></div>
+                        <div class="skeleton h-4 w-1/2"></div>
+                    </div>
+                    <div class="skeleton h-8 w-1/3"></div>
+                </div>
+            `).join('');
+        }
+    };
+
     // --- Data Storage and Management ---
     let groupsData = [];
     let agendaData = {};
+    let currentViewMode = 'list'; // 'list' or 'kanban'
+
+    // Filter & Sort State
+    let filterStartDate = null;
+    let filterEndDate = null;
+    let sortOrder = 'desc'; // 'desc' (score high->low) or 'asc'
+    let showArchived = false;
 
     const dataStore = {
         load: () => {
@@ -97,6 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
         leadSearchResults: document.getElementById('lead-search-results'),
         mapPinsLayer: document.getElementById('map-pins-layer'),
         mapPlaceholder: document.getElementById('map-placeholder-text'),
+
+        // Toolbar & Filters
+        exportCsvBtn: document.getElementById('export-csv-btn'),
+        importCsvInput: document.getElementById('import-csv-input'),
+        filterStartDate: document.getElementById('filter-start-date'),
+        filterEndDate: document.getElementById('filter-end-date'),
+        sortOrderBtn: document.getElementById('sort-order-btn'),
+        sortIndicator: document.getElementById('sort-indicator'),
+        showArchivedCheck: document.getElementById('show-archived-check'),
 
         // Legacy/Modals
         toast: document.getElementById('toast-notification'),
@@ -195,6 +284,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 linkedinUrl: `https://linkedin.com/in/${name.replace(/\s+/g, '-').toLowerCase()}`,
                 matchConfidence: "Alto"
             }));
+        },
+
+        // Item 30 (Nitro): Pitch de Elevador
+        generateElevatorPitch: async (groupName, sector) => {
+            const prompt = `Crie um pitch de vendas de 30 segundos (1 parágrafo) focado em dor e solução para vender para a empresa ${groupName} do setor ${sector}.`;
+            return await callAIApi('gemini', prompt);
+        },
+
+        // Item 33 (Nitro): Próximo Passo
+        suggestNextStep: async (history) => {
+            const prompt = `Baseado neste histórico de interação: "${history || 'Sem interações prévias'}", qual o próximo passo ideal? (Ligar, Email ou Visita). Responda curto com uma justificativa.`;
+            return await callAIApi('gemini', prompt);
+        },
+
+        // Item 35 (Nitro): Gerador de Contrato
+        generateContractClause: async (groupName, value) => {
+            const prompt = `Gere uma cláusula de objeto de contrato comercial para a empresa ${groupName} no valor de R$ ${value}. Retorne em HTML simples (<p>).`;
+            return await callAIApi('gemini', prompt);
         }
     };
 
@@ -291,57 +398,182 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const showToast = (message, isError = false) => {
-        ui.toast.textContent = message;
-        ui.toast.className = `toast show ${isError ? 'error' : ''}`;
-        setTimeout(() => { ui.toast.classList.remove('show'); }, 3000);
+        UIUtils.showToast(message, isError ? 'error' : 'success');
     };
 
     const renderGroups = (groups) => {
         ui.groupGrid.innerHTML = '';
 
+        // Filter Logic (Item 22, 25)
+        let filtered = groups.filter(g => {
+            // Archive Filter
+            if (showArchived) { if (!g.archived) return false; }
+            else { if (g.archived) return false; }
+
+            // Date Filter
+            if (filterStartDate || filterEndDate) {
+                const date = new Date(g.createdAt).getTime();
+                const start = filterStartDate ? new Date(filterStartDate).getTime() : 0;
+                const end = filterEndDate ? new Date(filterEndDate).getTime() : Infinity;
+                if (date < start || date > end) return false;
+            }
+            return true;
+        });
+
+        // Sort Logic (Item 23)
+        filtered.sort((a, b) => {
+            const scoreA = a.score || 0;
+            const scoreB = b.score || 0;
+            return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
+        });
+
         // Update Dashboard KPIs
-        if(ui.kpiTotalLeads) ui.kpiTotalLeads.textContent = groups.length;
+        if(ui.kpiTotalLeads) ui.kpiTotalLeads.textContent = groups.length; // Total DB size
         if(ui.kpiCompanies) ui.kpiCompanies.textContent = groups.filter(g => g.cnae).length;
 
-        if (groups.length === 0) { ui.groupGrid.innerHTML = `<p class="text-slate-500 col-span-full text-center py-10">Nenhum lead no diretório.</p>`; return; }
-        groups.forEach(group => {
-            const card = document.createElement('div');
-            // Enhanced "Clean" Card Style
-            card.className = 'glass-card p-6 rounded-2xl cursor-pointer hover-lift flex flex-col justify-between h-48 border-l-4 border-indigo-500';
-            card.innerHTML = `
+        if (filtered.length === 0) { ui.groupGrid.innerHTML = `<p class="text-slate-500 col-span-full text-center py-10">Nenhum lead encontrado com os filtros atuais.</p>`; return; }
+
+        if (currentViewMode === 'kanban') {
+            ui.groupGrid.classList.remove('grid', 'grid-cols-1', 'sm:grid-cols-2', 'xl:grid-cols-3', '2xl:grid-cols-4');
+            ui.groupGrid.classList.add('flex', 'overflow-x-auto', 'gap-6', 'pb-4');
+
+            const columns = {
+                'Novos Leads': filtered.filter(g => !g.score || g.score < 30),
+                'Em Qualificação': filtered.filter(g => g.score >= 30 && g.score < 70),
+                'Oportunidades Quentes': filtered.filter(g => g.score >= 70)
+            };
+
+            Object.entries(columns).forEach(([title, leads]) => {
+                const col = document.createElement('div');
+                col.className = 'min-w-[300px] bg-slate-100 rounded-xl p-4 flex flex-col gap-4';
+                col.innerHTML = `<h3 class="font-bold text-slate-700 mb-2 flex justify-between">${title} <span class="bg-white px-2 rounded text-sm">${leads.length}</span></h3>`;
+
+                const list = document.createElement('div');
+                list.className = 'space-y-3 overflow-y-auto max-h-[600px] custom-scrollbar';
+                leads.forEach(group => list.appendChild(createLeadCard(group, true)));
+                col.appendChild(list);
+                ui.groupGrid.appendChild(col);
+            });
+
+        } else {
+            ui.groupGrid.classList.add('grid', 'grid-cols-1', 'sm:grid-cols-2', 'xl:grid-cols-3', '2xl:grid-cols-4');
+            ui.groupGrid.classList.remove('flex', 'overflow-x-auto', 'pb-4');
+            filtered.forEach(group => ui.groupGrid.appendChild(createLeadCard(group)));
+        }
+    };
+
+    const createLeadCard = (group, isCompact = false) => {
+        const card = document.createElement('div');
+        const color = UIUtils.stringToColor(group.groupName);
+        const score = group.score || AIEngine.calculateLeadScore(group);
+        const commission = (parseFloat((group.revenueEstimate || '0').replace(/\D/g,'')) * 0.10).toFixed(2);
+
+        card.className = isCompact
+            ? 'bg-white p-4 rounded-lg shadow-sm border border-slate-200 cursor-pointer hover:shadow-md transition-all relative group'
+            : 'glass-card p-6 rounded-2xl cursor-pointer hover-lift flex flex-col justify-between h-56 border-l-4 relative group'; // Increased height for extras
+
+        card.style.borderLeftColor = color;
+
+        // Favorite Star
+        const star = document.createElement('button');
+        star.className = `absolute top-2 right-2 text-xl z-10 ${group.isFavorite ? 'text-yellow-400' : 'text-slate-300 hover:text-yellow-400'}`;
+        star.innerHTML = '★';
+        star.onclick = (e) => {
+            e.stopPropagation();
+            group.isFavorite = !group.isFavorite;
+            dataStore.save();
+            renderGroups(groupsData);
+        };
+        card.appendChild(star);
+
+        if (isCompact) {
+             card.innerHTML += `
+                <div class="flex items-center gap-2 mb-2 pr-4">
+                    <div class="w-2 h-2 rounded-full" style="background-color: ${color}"></div>
+                    <h4 class="font-bold text-sm text-slate-800 truncate">${group.groupName}</h4>
+                </div>
+                <div class="text-xs text-slate-500 flex justify-between">
+                    <span>${group.mainPhone ? '📞' : ''}</span>
+                    <span class="font-semibold ${score > 70 ? 'text-green-600' : 'text-slate-600'}">${score} pts</span>
+                </div>
+            `;
+        } else {
+            const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Reunião+com+${group.groupName}&details=Prospeccao&location=${group.mainWebsite || 'Online'}`;
+
+            card.innerHTML += `
                 <div>
                     <div class="flex justify-between items-start">
-                        <h3 class="font-bold text-lg text-slate-800 truncate pr-2">${group.groupName}</h3>
-                        <span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded-full">${group.cnae ? '🏢' : '👤'}</span>
+                        <div class="flex items-center gap-2 overflow-hidden">
+                             <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background-color: ${color}">${group.groupName.substring(0,2).toUpperCase()}</div>
+                             <h3 class="font-bold text-lg text-slate-800 truncate pr-6">${group.groupName}</h3>
+                        </div>
                     </div>
-                    <p class="text-xs text-slate-500 mt-2 flex items-center gap-1">${group.mainPhone ? '📞 ' + group.mainPhone : '📞 N/A'}</p>
-                    <p class="text-xs text-slate-500 mt-1 flex items-center gap-1">${group.mainWebsite ? '🌐 ' + group.mainWebsite : '🌐 N/A'}</p>
+                    <span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded-full whitespace-nowrap mt-2 inline-block">${group.cnae ? '🏢 CNPJ' : '👤 Lead'}</span>
+                    <p class="text-xs text-slate-500 mt-2 flex items-center gap-1 truncate"><i class="fas fa-phone text-slate-400"></i> ${group.mainPhone || 'N/A'}</p>
+                    <p class="text-xs text-slate-500 mt-1 flex items-center gap-1 truncate"><i class="fas fa-globe text-slate-400"></i> ${group.mainWebsite || 'N/A'}</p>
                 </div>
-                <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
-                    <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">Score: ${group.score || AIEngine.calculateLeadScore(group)}</span>
-                    <span class="text-xs font-medium text-slate-400">Ver detalhes &rarr;</span>
+
+                <div class="mt-2 space-y-1">
+                    <div class="flex gap-2">
+                        <a href="https://wa.me/55${(group.mainPhone||'').replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" class="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 text-xs" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+                        <a href="${googleCalendarUrl}" target="_blank" onclick="event.stopPropagation()" class="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 text-xs" title="Agendar"><i class="fas fa-calendar-alt"></i></a>
+                        <button class="copy-json-btn p-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs" title="Copiar JSON"><i class="fas fa-code"></i></button>
+                    </div>
+                </div>
+
+                <div class="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
+                    <span class="text-xs font-semibold ${score > 70 ? 'text-green-600' : 'text-indigo-600'} bg-slate-50 px-2 py-1 rounded">Score: ${score}</span>
+                    <span class="text-[10px] text-slate-400">Comissão ~R$ ${commission > 0 ? commission : '0,00'}</span>
                 </div>`;
-            card.addEventListener('click', () => openModal(group));
-            ui.groupGrid.appendChild(card);
-        });
+
+            // Attach specific handlers
+            const copyBtn = card.querySelector('.copy-json-btn');
+            if(copyBtn) {
+                copyBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(JSON.stringify(group, null, 2));
+                    UIUtils.showToast('JSON copiado!');
+                });
+            }
+        }
+        card.addEventListener('click', () => openModal(group));
+        return card;
     };
 
     const openModal = (group) => {
         ui.modalContent.innerHTML = `
             <div class="p-6 border-b border-slate-200 flex justify-between items-start">
-                <div><h2 class="text-2xl font-bold text-slate-900">${group.groupName}</h2></div>
-                <button id="close-modal-btn" class="p-1 rounded-full text-slate-400 hover:bg-slate-100"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">${group.groupName}</h2>
+                    <div class="flex flex-wrap gap-2 mt-2" id="modal-tags-container">
+                        ${(group.tags || []).map(tag => `<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-semibold">#${tag}</span>`).join('')}
+                    </div>
+                    <input type="text" id="modal-tag-input" class="mt-2 text-xs border border-slate-200 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 outline-none w-40" placeholder="+ Tag (Enter)">
+                </div>
+                <div class="flex gap-2">
+                    <button id="delete-lead-btn" class="p-2 text-slate-400 hover:text-red-600" title="Excluir Permanentemente"><i class="fas fa-trash"></i></button>
+                    <button id="archive-lead-btn" class="p-2 text-slate-400 hover:text-orange-500" title="${group.archived ? 'Desarquivar' : 'Arquivar'}"><i class="fas fa-archive"></i></button>
+                    <button id="close-modal-btn" class="p-2 rounded-full text-slate-400 hover:bg-slate-100"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                </div>
             </div>
             <div class="p-6 flex-grow overflow-y-auto" id="modal-main-content">
                 <div class="border-b border-slate-200 mb-4">
                     <nav class="-mb-px flex space-x-6" id="modal-tabs">
                         <button data-tab="prospeccao" class="tab-button active">Prospecção</button>
                         <button data-tab="analise" class="tab-button">Análise</button>
-                        <button data-tab="dados-avancados" class="tab-button">Dados Avançados (Pilar 2)</button>
-                        <button data-tab="ia-avancada" class="tab-button">IA Aplicada (Pilar 3)</button>
+                        <button data-tab="dados-avancados" class="tab-button">Dados</button>
+                        <button data-tab="ia-avancada" class="tab-button">Nitro (IA)</button>
+                        <button data-tab="tools" class="tab-button">Ferramentas</button>
                     </nav>
                 </div>
-                <div id="tab-content-prospeccao" class="tab-content active"><div id="sales-kit-container" class="space-y-6"><button id="generate-sales-kit-btn" class="inline-flex items-center gap-x-2 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">🚀 Gerar Kit de Prospecção</button><div id="sales-kit-content" class="mt-4 prose-custom max-w-none"></div></div></div>
+
+                <div id="tab-content-prospeccao" class="tab-content active">
+                    <div id="sales-kit-container" class="space-y-6">
+                        <button id="generate-sales-kit-btn" class="inline-flex items-center gap-x-2 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">🚀 Gerar Kit de Prospecção</button>
+                        <div id="sales-kit-content" class="mt-4 prose-custom max-w-none"></div>
+                    </div>
+                </div>
+
                 <div id="tab-content-analise" class="tab-content"><div class="space-y-6">
                     <div><h3 class="font-semibold text-lg mb-2 text-slate-800">Enriquecimento de Dados</h3><div id="ai-enrichment-container"><button id="enrich-lead-btn" class="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">🔍 Enriquecer Dados</button><div id="ai-enrichment-content" class="mt-4"></div></div></div>
                     <div class="border-t border-slate-200 pt-6"><h3 class="font-semibold text-lg mb-2 text-slate-800">Análise Estratégica</h3><div id="ai-analysis-container"><button id="generate-ai-analysis-btn" class="inline-flex items-center gap-x-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">✨ Gerar Análise</button><div id="ai-analysis-content" class="mt-4 prose-custom max-w-none"></div></div></div>
@@ -350,6 +582,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div id="tab-content-dados-avancados" class="tab-content">
                     <div id="advanced-data-content" class="space-y-4">
                         <p class="text-slate-500 text-sm">Carregando dados avançados...</p>
+                    </div>
+                </div>
+
+                <div id="tab-content-tools" class="tab-content">
+                    <div class="grid grid-cols-2 gap-4">
+                         <button id="btn-gen-pdf" class="bg-red-500 text-white p-3 rounded hover:bg-red-600 flex items-center justify-center gap-2"><i class="fas fa-file-pdf"></i> Gerar Proposta PDF</button>
+                         <button id="btn-mark-won" class="bg-yellow-500 text-white p-3 rounded hover:bg-yellow-600 flex items-center justify-center gap-2"><i class="fas fa-trophy"></i> Marcar Venda (Confetti)</button>
+                         <button id="btn-speak-pitch" class="bg-blue-500 text-white p-3 rounded hover:bg-blue-600 flex items-center justify-center gap-2"><i class="fas fa-volume-up"></i> Ouvir Pitch (TTS)</button>
+                         <button id="btn-record-note" class="bg-slate-700 text-white p-3 rounded hover:bg-slate-800 flex items-center justify-center gap-2"><i class="fas fa-microphone"></i> Gravar Nota</button>
+                    </div>
+                    <div class="mt-4 p-4 bg-slate-50 rounded border">
+                         <h4 class="font-bold text-sm mb-2">IA Nitro Actions</h4>
+                         <div id="nitro-actions-result" class="text-sm text-slate-600 italic mb-2">Selecione uma ação...</div>
+                         <div class="flex gap-2">
+                            <button id="btn-elevator-pitch" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Elevator Pitch</button>
+                            <button id="btn-next-step" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Próximo Passo</button>
+                            <button id="btn-contract" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Minuta Contrato</button>
+                         </div>
                     </div>
                 </div>
             </div>`;
@@ -370,6 +620,118 @@ document.addEventListener('DOMContentLoaded', () => {
         // Renderizar dados avançados (Pilar 2) e IA (Pilar 3) automaticamente
         renderAdvancedData(group);
         renderAIData(group);
+
+        // Tag Logic
+        const tagInput = document.getElementById('modal-tag-input');
+        tagInput.addEventListener('keydown', (e) => {
+            if(e.key === 'Enter') {
+                const tag = e.target.value.trim();
+                if(tag) {
+                    if(!group.tags) group.tags = [];
+                    if(!group.tags.includes(tag)) {
+                        group.tags.push(tag);
+                        dataStore.save();
+                        // Re-render tags
+                        const container = document.getElementById('modal-tags-container');
+                        container.innerHTML = group.tags.map(t => `<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-semibold">#${t}</span>`).join('');
+                    }
+                    e.target.value = '';
+                }
+            }
+        });
+
+        // Archive Logic
+        const archiveBtn = document.getElementById('archive-lead-btn');
+        archiveBtn.addEventListener('click', () => {
+            group.archived = !group.archived;
+            dataStore.save();
+            renderGroups(groupsData);
+            closeModal();
+            UIUtils.showToast(group.archived ? 'Lead arquivado!' : 'Lead desarquivado!');
+        });
+
+        // Delete Logic with Undo
+        const deleteBtn = document.getElementById('delete-lead-btn');
+        if(deleteBtn) { // Defensive check as button might not exist in all contexts
+            deleteBtn.addEventListener('click', () => {
+                if(!confirm("Tem certeza que deseja excluir?")) return;
+                const index = groupsData.indexOf(group);
+                if (index > -1) {
+                    const deletedGroup = groupsData[index];
+                    groupsData.splice(index, 1);
+                    dataStore.save();
+                    renderGroups(groupsData);
+                    closeModal();
+
+                    UIUtils.showToast('Lead excluído.', 'success', () => {
+                        groupsData.splice(index, 0, deletedGroup); // Restore at index
+                        dataStore.save();
+                        renderGroups(groupsData);
+                        UIUtils.showToast('Exclusão desfeita!');
+                    });
+                }
+            });
+        }
+
+        // Tools Event Listeners
+        document.getElementById('btn-gen-pdf').addEventListener('click', () => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text(`Proposta Comercial para ${group.groupName}`, 10, 10);
+            doc.text(`CNPJ: ${group.cnae || 'N/A'}`, 10, 20);
+            doc.text(`Valor Estimado: ${group.revenueEstimate || 'Sob Consulta'}`, 10, 30);
+            doc.text(`\nEste documento serve como proposta inicial...`, 10, 40);
+            doc.save(`proposta_${group.groupName}.pdf`);
+            UIUtils.showToast('PDF Gerado!');
+        });
+
+        document.getElementById('btn-mark-won').addEventListener('click', () => {
+            // Confetti
+            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            group.status = 'won';
+            group.score = 100; // Boost score
+            dataStore.save();
+            UIUtils.showToast('Parabéns pela venda! 🏆');
+        });
+
+        document.getElementById('btn-speak-pitch').addEventListener('click', () => {
+             const text = group.coldMailHook || `Olá, somos da Sales AI e queremos falar com a ${group.groupName}.`;
+             const u = new SpeechSynthesisUtterance(text);
+             u.lang = 'pt-BR';
+             speechSynthesis.speak(u);
+        });
+
+        document.getElementById('btn-record-note').addEventListener('click', () => {
+             const Recognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+             if (!Recognition) { alert("Navegador não suporta reconhecimento de voz."); return; }
+             const recognition = new Recognition();
+             recognition.lang = 'pt-BR';
+             recognition.onresult = (e) => {
+                 const text = e.results[0][0].transcript;
+                 alert("Nota gravada: " + text);
+                 // Save note logic here
+             };
+             recognition.start();
+             UIUtils.showToast('Fale agora...');
+        });
+
+        // Nitro Actions
+        const nitroResult = document.getElementById('nitro-actions-result');
+        document.getElementById('btn-elevator-pitch').addEventListener('click', async () => {
+            nitroResult.innerHTML = '<div class="loader-dark"></div>';
+            const res = await AIEngine.generateElevatorPitch(group.groupName, group.cnae || 'Geral');
+            nitroResult.innerHTML = res;
+        });
+        document.getElementById('btn-next-step').addEventListener('click', async () => {
+             nitroResult.innerHTML = '<div class="loader-dark"></div>';
+             const res = await AIEngine.suggestNextStep(JSON.stringify(group.history || []));
+             nitroResult.innerHTML = res;
+        });
+        document.getElementById('btn-contract').addEventListener('click', async () => {
+             nitroResult.innerHTML = '<div class="loader-dark"></div>';
+             const res = await AIEngine.generateContractClause(group.groupName, '10.000,00');
+             nitroResult.innerHTML = res;
+        });
     };
 
     const renderAIData = (group) => {
@@ -813,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const renderSearchResults = (results) => {
+    let renderSearchResults = (results) => {
         const resultsDiv = ui.leadSearchResults;
         if (!results || results.length === 0) {
             resultsDiv.innerHTML = '<p class="text-slate-500 text-sm">Nenhum lead encontrado.</p>';
@@ -977,6 +1339,74 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- CSV & Filter Handlers ---
+    if(ui.exportCsvBtn) {
+        ui.exportCsvBtn.addEventListener('click', () => {
+            if(groupsData.length === 0) { UIUtils.showToast('Sem dados para exportar.', 'error'); return; }
+            // Simple CSV generation
+            const headers = ['ID', 'Nome', 'Telefone', 'Email', 'Site', 'Score', 'Status', 'CriadoEm'];
+            const rows = groupsData.map(g => [
+                g.id, `"${g.groupName}"`, g.mainPhone, g.primaryEmail || '', g.mainWebsite, g.score||0, g.archived?'Arquivado':'Ativo', g.createdAt
+            ]);
+            const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "leads_sales_ai.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    }
+
+    if(ui.importCsvInput) {
+        ui.importCsvInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                const lines = text.split('\n').slice(1); // Skip header
+                let count = 0;
+                lines.forEach(line => {
+                    const cols = line.split(',');
+                    if (cols.length >= 2) {
+                        const name = cols[1]?.replace(/"/g, '').trim(); // Assuming 2nd col is Name based on Export structure
+                        if(name && !groupsData.some(g => g.groupName === name)) {
+                            groupsData.unshift({
+                                id: crypto.randomUUID(),
+                                groupName: name,
+                                mainPhone: cols[2] || '',
+                                primaryEmail: cols[3] || '',
+                                mainWebsite: cols[4] || '',
+                                score: parseInt(cols[5]) || 50,
+                                createdAt: new Date().toISOString(),
+                                tags: ['importado']
+                            });
+                            count++;
+                        }
+                    }
+                });
+                dataStore.save();
+                renderGroups(groupsData);
+                UIUtils.showToast(`${count} leads importados!`);
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    // Filter Listeners
+    if(ui.filterStartDate) ui.filterStartDate.addEventListener('change', (e) => { filterStartDate = e.target.value; renderGroups(groupsData); });
+    if(ui.filterEndDate) ui.filterEndDate.addEventListener('change', (e) => { filterEndDate = e.target.value; renderGroups(groupsData); });
+    if(ui.showArchivedCheck) ui.showArchivedCheck.addEventListener('change', (e) => { showArchived = e.target.checked; renderGroups(groupsData); });
+    if(ui.sortOrderBtn) {
+        ui.sortOrderBtn.addEventListener('click', () => {
+            sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+            ui.sortIndicator.textContent = sortOrder === 'desc' ? '⬇️' : '⬆️';
+            renderGroups(groupsData);
+        });
+    }
+
     // Event Listeners (Defensive)
     if(ui.consultBtn) ui.consultBtn.addEventListener('click', consultLeadData);
     if(ui.searchLeadsBtn) ui.searchLeadsBtn.addEventListener('click', searchLeadsWithAI);
@@ -987,7 +1417,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const closeSecurity = document.getElementById('close-security-btn');
     if(closeSecurity) closeSecurity.addEventListener('click', () => { ui.securityModal.classList.add('hidden'); ui.securityModal.classList.remove('flex'); });
-    
+
     const lgpdBtn = document.getElementById('lgpd-forget-btn');
     if(lgpdBtn) lgpdBtn.addEventListener('click', handleLGPDCleanup);
 
@@ -1082,10 +1512,12 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMapPins(results);
     };
 
-    ui.searchInput.addEventListener('input', (e) => { renderGroups(groupsData.filter(g => g.groupName.toLowerCase().includes(e.target.value.toLowerCase()))); });
-    ui.modalContainer.addEventListener('click', (e) => { if(e.target === ui.modalContainer) { closeModal(); } });
-    ui.backupBtn.addEventListener('click', dataStore.backup);
-    ui.restoreInput.addEventListener('change', (e) => dataStore.restore(e.target.files[0]));
+    if(ui.searchInput) ui.searchInput.addEventListener('input', (e) => { renderGroups(groupsData.filter(g => g.groupName.toLowerCase().includes(e.target.value.toLowerCase()))); });
+    if(ui.modalContainer) ui.modalContainer.addEventListener('click', (e) => { if(e.target === ui.modalContainer) { closeModal(); } });
+
+    // Backup/Restore buttons are currently not in UI, skipping listeners
+    // if(ui.backupBtn) ui.backupBtn.addEventListener('click', dataStore.backup);
+    // if(ui.restoreInput) ui.restoreInput.addEventListener('change', (e) => dataStore.restore(e.target.files[0]));
     
     setupTabs('#lead-management-tabs .tab-button', '.dashboard-card .tab-content');
 
@@ -1202,7 +1634,144 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    // --- Event Listeners (Chassis) ---
+
+    // Zen Mode Toggle
+    const zenToggle = document.getElementById('zen-mode-toggle');
+    const sidebar = document.getElementById('sidebar');
+    if(zenToggle && sidebar) {
+        zenToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            zenToggle.innerHTML = sidebar.classList.contains('collapsed') ? '<i class="fas fa-chevron-right text-xs"></i>' : '<i class="fas fa-chevron-left text-xs"></i>';
+        });
+    }
+
+    // Scroll to Top
+    const scrollBtn = document.getElementById('scroll-to-top');
+    const mainScroll = document.getElementById('main-scroll-area');
+    if(scrollBtn && mainScroll) {
+        mainScroll.addEventListener('scroll', () => {
+            if (mainScroll.scrollTop > 300) scrollBtn.classList.add('visible');
+            else scrollBtn.classList.remove('visible');
+        });
+        scrollBtn.addEventListener('click', () => {
+            mainScroll.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+
+    // View Mode Toggle (Add to Directory Header dynamically)
+    // We try to find the header container. If it doesn't exist yet (hidden section), we'll do it on init.
+    const directoryHeader = document.querySelector('#section-directory .flex.gap-2');
+    if(directoryHeader) {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'bg-white text-slate-600 px-3 py-2 rounded-lg text-sm font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors';
+        toggleBtn.innerHTML = '<i class="fas fa-columns"></i>';
+        toggleBtn.title = 'Alternar Vista (Lista/Kanban)';
+        toggleBtn.addEventListener('click', () => {
+            currentViewMode = currentViewMode === 'list' ? 'kanban' : 'list';
+            toggleBtn.innerHTML = currentViewMode === 'list' ? '<i class="fas fa-columns"></i>' : '<i class="fas fa-list"></i>';
+            renderGroups(groupsData);
+        });
+        directoryHeader.insertBefore(toggleBtn, directoryHeader.firstChild);
+    }
+
+    // Navigation Updates (Breadcrumbs)
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const sectionId = item.dataset.section;
+            UIUtils.updateBreadcrumbs(sectionId);
+        });
+    });
+
+    // Pomodoro Timer Logic
+    const pomodoroTimerEl = document.getElementById('pomodoro-timer');
+    const pomodoroStartBtn = document.getElementById('pomodoro-start');
+    const pomodoroResetBtn = document.getElementById('pomodoro-reset');
+    let pomodoroInterval;
+    let pomodoroTime = 25 * 60;
+    let pomodoroActive = false;
+
+    const updatePomodoroDisplay = () => {
+        const m = Math.floor(pomodoroTime / 60);
+        const s = pomodoroTime % 60;
+        pomodoroTimerEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    };
+
+    if(pomodoroStartBtn) {
+        pomodoroStartBtn.addEventListener('click', () => {
+            if(pomodoroActive) {
+                clearInterval(pomodoroInterval);
+                pomodoroActive = false;
+                pomodoroStartBtn.textContent = "Retomar";
+                pomodoroStartBtn.className = "flex-1 bg-emerald-500 hover:bg-emerald-600 text-xs py-1 rounded font-bold";
+            } else {
+                pomodoroActive = true;
+                pomodoroStartBtn.textContent = "Pausar";
+                pomodoroStartBtn.className = "flex-1 bg-amber-500 hover:bg-amber-600 text-xs py-1 rounded font-bold";
+                pomodoroInterval = setInterval(() => {
+                    pomodoroTime--;
+                    updatePomodoroDisplay();
+                    if(pomodoroTime <= 0) {
+                        clearInterval(pomodoroInterval);
+                        pomodoroActive = false;
+                        UIUtils.showToast("Pomodoro Finalizado! Hora do descanso.");
+                        // Play sound or notification here
+                        pomodoroTime = 5 * 60; // 5 min break
+                        updatePomodoroDisplay();
+                        pomodoroStartBtn.textContent = "Início";
+                        pomodoroStartBtn.className = "flex-1 bg-emerald-500 hover:bg-emerald-600 text-xs py-1 rounded font-bold";
+                    }
+                }, 1000);
+            }
+        });
+    }
+
+    if(pomodoroResetBtn) {
+        pomodoroResetBtn.addEventListener('click', () => {
+            clearInterval(pomodoroInterval);
+            pomodoroActive = false;
+            pomodoroTime = 25 * 60;
+            updatePomodoroDisplay();
+            pomodoroStartBtn.textContent = "Início";
+            pomodoroStartBtn.className = "flex-1 bg-emerald-500 hover:bg-emerald-600 text-xs py-1 rounded font-bold";
+        });
+    }
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Ctrl+K to Search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            const searchInput = document.getElementById('searchInput');
+            if(searchInput) {
+                searchInput.focus();
+                // Ensure directory section is visible if not
+                const directoryTab = document.querySelector('[data-section="directory"]');
+                if(directoryTab) directoryTab.click();
+            }
+        }
+    });
+
+    // Konami Code
+    let konamiCode = [];
+    const konamiSequence = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+    document.addEventListener('keydown', (e) => {
+        konamiCode.push(e.key);
+        konamiCode = konamiCode.slice(-10);
+        if (JSON.stringify(konamiCode) === JSON.stringify(konamiSequence)) {
+            UIUtils.showToast('GOD MODE ATIVADO! 🚀🚀🚀');
+            confetti({ particleCount: 500, spread: 360, startVelocity: 60 });
+            document.body.style.filter = "invert(1) hue-rotate(180deg)";
+            setTimeout(() => { document.body.style.filter = ""; }, 5000);
+        }
+    });
+
     // --- Initial Load ---
     dataStore.load();
     initializeApp();
+
+    // Expose for Debugging/Verification
+    window.UIUtils = UIUtils;
+    window.AIEngine = AIEngine;
+    window.DataAcquisition = DataAcquisition;
 });
