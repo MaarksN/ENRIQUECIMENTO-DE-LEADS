@@ -1,7 +1,14 @@
-import React, { useState } from 'react';
-import { Lead } from '../types';
-import { Icons } from '../constants';
-import { searchNewLeads } from '../services/geminiService';
+import React, { useState, useEffect } from 'react';
+import { Lead } from './types';
+import { Icons } from './constants';
+import { searchNewLeads } from './geminiService';
+import { Skeleton } from './src/components/ui/Skeleton';
+
+const stringToColor = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return `hsl(${hash % 360}, 70%, 50%)`;
+}
 
 interface LeadListProps {
   leads: Lead[];
@@ -13,6 +20,21 @@ const LeadList: React.FC<LeadListProps> = ({ leads, onSelect, onAddLeads }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchingAI, setIsSearchingAI] = useState(false);
   const [showAISearch, setShowAISearch] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [showTopBtn, setShowTopBtn] = useState(false);
+
+  useEffect(() => {
+      const main = document.querySelector('main');
+      const handleScroll = () => {
+          if (main && main.scrollTop > 400) {
+              setShowTopBtn(true);
+          } else {
+              setShowTopBtn(false);
+          }
+      };
+      main?.addEventListener('scroll', handleScroll);
+      return () => main?.removeEventListener('scroll', handleScroll);
+  }, []);
   
   // Advanced AI Search Form State
   const [aiSector, setAiSector] = useState('Varejo Automotivo');
@@ -24,6 +46,27 @@ const LeadList: React.FC<LeadListProps> = ({ leads, onSelect, onAddLeads }) => {
     l.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     l.sector?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const exportCSV = () => {
+    if (!leads.length) return;
+    const headers = ["ID", "Company", "Sector", "Location", "Score", "Status"].join(",");
+    const rows = leads.map(l => [
+      l.id,
+      `"${l.companyName}"`,
+      `"${l.sector}"`,
+      `"${l.location}"`,
+      l.score,
+      l.status
+    ].join(","));
+    const content = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
+    const encodedUri = encodeURI(content);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "leads_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleAISearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +114,23 @@ const LeadList: React.FC<LeadListProps> = ({ leads, onSelect, onAddLeads }) => {
           </h2>
           <p className="text-lg text-slate-500 font-medium">Gerencie seu pipeline e descubra novos negócios.</p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+             <button
+                onClick={() => setViewMode(viewMode === 'list' ? 'kanban' : 'list')}
+                className="p-4 rounded-2xl bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
+                title={viewMode === 'list' ? 'Ver Kanban' : 'Ver Lista'}
+             >
+                {viewMode === 'list' ? <Icons.Columns /> : <Icons.List />}
+             </button>
+
+             <button
+                onClick={exportCSV}
+                className="p-4 rounded-2xl bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
+                title="Exportar CSV"
+             >
+                <span className="font-bold">⬇ CSV</span>
+             </button>
+
              <button 
                 onClick={() => setShowAISearch(!showAISearch)}
                 className={`relative px-8 py-4 rounded-3xl font-bold text-lg shadow-xl hover:scale-105 transition-all flex items-center gap-3 overflow-hidden ${showAISearch ? 'bg-slate-200 text-slate-600' : 'bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-amber-500/30'}`}
@@ -175,7 +234,53 @@ const LeadList: React.FC<LeadListProps> = ({ leads, onSelect, onAddLeads }) => {
         />
       </div>
 
-      {/* Grid of Results */}
+      {/* Skeleton Loading during Search */}
+      {isSearchingAI && (
+          <div className="grid grid-cols-1 gap-6 mb-6">
+             <Skeleton className="h-40 w-full rounded-[2rem]" />
+             <Skeleton className="h-40 w-full rounded-[2rem]" />
+             <Skeleton className="h-40 w-full rounded-[2rem]" />
+          </div>
+      )}
+
+      {/* Grid of Results (List or Kanban) */}
+      {viewMode === 'kanban' ? (
+        <div className="flex gap-4 overflow-x-auto pb-4">
+           {['new', 'negotiation', 'won'].map(status => {
+               const items = filteredLeads.filter(l => l.status === status);
+               return (
+                   <div key={status} className="min-w-[320px] flex-1 bg-slate-100 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-200 dark:border-slate-800">
+                       <h3 className="font-bold text-lg mb-4 capitalize text-slate-500 flex justify-between items-center">
+                           {status === 'new' ? 'Novos' : status === 'negotiation' ? 'Em Negociação' : 'Fechados'}
+                           <span className="bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded-lg text-xs">{items.length}</span>
+                       </h3>
+                       <div className="space-y-4">
+                           {items.map(lead => (
+                               <div key={lead.id} onClick={() => onSelect(lead)} className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 cursor-pointer hover:shadow-md transition-all hover:border-blue-400 dark:hover:border-blue-500 group">
+                                   <div className="flex justify-between items-start mb-2">
+                                       <span className="font-bold dark:text-white line-clamp-1">{lead.companyName}</span>
+                                       <span className={`text-xs font-bold px-2 py-1 rounded-lg ${lead.score > 70 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                                           {lead.score}
+                                       </span>
+                                   </div>
+                                   <div className="text-xs text-slate-500 mb-3">{lead.sector}</div>
+                                   <div className="flex items-center gap-2 text-xs text-slate-400">
+                                       <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+                                       {lead.location}
+                                   </div>
+                               </div>
+                           ))}
+                           {items.length === 0 && (
+                               <div className="text-center py-8 text-slate-400 text-sm border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                                   Vazio
+                               </div>
+                           )}
+                       </div>
+                   </div>
+               )
+           })}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-6">
         {filteredLeads.map((lead) => (
           <div 
@@ -196,11 +301,10 @@ const LeadList: React.FC<LeadListProps> = ({ leads, onSelect, onAddLeads }) => {
             <div className="flex flex-col md:flex-row justify-between gap-8">
                 {/* Left: Avatar & Info */}
                 <div className="flex gap-6 items-start flex-1">
-                    <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl font-bold text-white shadow-xl ${
-                        lead.score > 80 ? 'bg-gradient-to-br from-amber-400 to-orange-600' :
-                        lead.score > 50 ? 'bg-gradient-to-br from-blue-400 to-purple-600' :
-                        'bg-gradient-to-br from-slate-400 to-slate-600'
-                    }`}>
+                    <div
+                        className="w-20 h-20 rounded-3xl flex items-center justify-center text-3xl font-bold text-white shadow-xl transition-transform hover:scale-105"
+                        style={{ backgroundColor: stringToColor(lead.companyName) }}
+                    >
                         {lead.companyName.charAt(0)}
                     </div>
                     
@@ -274,6 +378,17 @@ const LeadList: React.FC<LeadListProps> = ({ leads, onSelect, onAddLeads }) => {
           </div>
         )}
       </div>
+      )}
+
+      {/* Back to Top Button */}
+      {showTopBtn && (
+        <button
+            onClick={() => document.querySelector('main')?.scrollTo({top:0, behavior:'smooth'})}
+            className="fixed bottom-8 right-8 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-4"
+        >
+            <Icons.ArrowUp />
+        </button>
+      )}
     </div>
   );
 };

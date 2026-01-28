@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Icons } from '../constants';
+import { Icons } from './constants';
 import { 
   generateMarketingImage, 
   generateVideoAsset, 
@@ -7,7 +7,7 @@ import {
   deepReasoning,
   transcribeAudio,
   analyzeVisualContent
-} from '../services/geminiService';
+} from './geminiService';
 
 const AILab: React.FC = () => {
   const [activeTool, setActiveTool] = useState<'image' | 'video' | 'audio' | 'brain'>('image');
