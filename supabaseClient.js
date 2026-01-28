@@ -180,6 +180,8 @@ class QueryBuilder {
     async update(data) {
         // Requires filter to be set usually, simple mock applies to filtered
         // This is a simplified "execute" step for updates
+        // Simulate Network Latency
+        await new Promise(r => setTimeout(r, 100));
         return this._execute('update', data);
     }
 

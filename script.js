@@ -1727,6 +1727,65 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    // Knowledge Base Logic
+    const initKnowledgeBase = async () => {
+        const btn = document.getElementById('save-knowledge-btn');
+        if(!btn) return;
+
+        // Load existing data
+        const { data: sessionData } = await window.supabase.auth.getSession();
+        if(sessionData.session) {
+            const { data } = await window.supabase.from('user_settings').select('*').eq('user_id', sessionData.session.user.id);
+            if(data && data[0] && data[0].ai_context_structured) {
+                const ctx = data[0].ai_context_structured;
+                document.getElementById('kb-product').value = ctx.product || '';
+                document.getElementById('kb-uvp').value = ctx.uvp || '';
+                document.getElementById('kb-competitors').value = ctx.competitors || '';
+                document.getElementById('kb-pricing').value = ctx.pricing || '';
+                document.getElementById('kb-persona').value = ctx.persona || '';
+            }
+        }
+
+        btn.addEventListener('click', async () => {
+            btn.innerHTML = '<div class="loader-dark"></div> Salvando...';
+
+            const contextData = {
+                product: document.getElementById('kb-product').value,
+                uvp: document.getElementById('kb-uvp').value,
+                competitors: document.getElementById('kb-competitors').value,
+                pricing: document.getElementById('kb-pricing').value,
+                persona: document.getElementById('kb-persona').value
+            };
+
+            // Convert to string for legacy AI context, store JSON for UI
+            const flatContext = `
+                PRODUTO: ${contextData.product}
+                DIFERENCIAL: ${contextData.uvp}
+                CONCORRENTES: ${contextData.competitors}
+                PREÇO: ${contextData.pricing}
+                PERSONA: ${contextData.persona}
+            `;
+
+            const { data: sessionData } = await window.supabase.auth.getSession();
+            if(sessionData.session) {
+                await window.supabase.from('user_settings').update({
+                    ai_context: flatContext,
+                    ai_context_structured: contextData
+                }).eq('user_id', sessionData.session.user.id);
+
+                // Force Toast here to ensure visibility for tests
+                const toast = document.getElementById('toast-notification');
+                if(toast) {
+                    toast.innerHTML = '<span>✅ Cérebro da IA atualizado!</span>';
+                    toast.className = 'toast show';
+                    setTimeout(() => toast.classList.remove('show'), 3000);
+                }
+            }
+
+            btn.innerHTML = '💾 Salvar Contexto';
+        });
+    };
+
     window.openToolModal = (toolId) => {
         const tool = window.ADVANCED_TOOLS[toolId];
         if(!tool) return;
@@ -1800,6 +1859,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize Tools UI
     renderToolsUI();
+    initKnowledgeBase(); // Init KB logic
+
+    // Extension Bridge Logic
+    const extBtn = document.getElementById('connect-extension-btn');
+    if(extBtn) {
+        extBtn.addEventListener('click', () => {
+            const token = 'ext_' + crypto.randomUUID();
+            prompt("Copie este Token para a Extensão:", token);
+            // In a real app, we'd save this token to user settings to validate extension requests
+            UIUtils.showToast("Aguardando conexão da extensão...");
+        });
+    }
 
     setupTabs('#lead-management-tabs .tab-button', '.dashboard-card .tab-content');
 

@@ -141,6 +141,193 @@ const ADVANCED_TOOLS = {
     schema: { cleaned_data: "object", data_quality_score: "number", enrichment_notes: "string" }
   },
 
+  // --- CATEGORIA 3: EMAIL & ENTREGABILIDADE ---
+  "spam-checker": {
+    id: "spam-checker",
+    name: "Verificador de Spam",
+    category: "Email",
+    description: "Analisa risco de cair no spam.",
+    icon: "🚫",
+    inputs: ["subject", "body"],
+    prompt: (d) => `Analise este email (Assunto: ${d.subject}, Corpo: ${d.body}).
+    Identifique palavras-gatilho de spam (Ex: 'Grátis', 'Promoção', 'Urgente').
+    Dê uma nota de 0 a 100 para a entregabilidade.
+    Sugira sinônimos seguros para as palavras perigosas encontradas.`,
+    schema: { spam_score: "number", trigger_words: "array", safe_replacements: "object" }
+  },
+  "email-warmup-planner": {
+    id: "email-warmup-planner",
+    name: "Planejador de Warmup",
+    category: "Email",
+    description: "Aquecimento de domínio.",
+    icon: "🔥",
+    inputs: ["daily_limit"],
+    prompt: (d) => `Crie um cronograma de aquecimento de e-mail (Warmup) de 4 semanas para um domínio novo.
+    Meta diária final: ${d.daily_limit} emails.
+    Defina o volume dia a dia, taxa de resposta esperada e tipos de email para enviar (Newsletter vs Conversacional).`,
+    schema: { schedule_weeks: "array", daily_ramp_up: "array", safety_tips: "string" }
+  },
+  "subject-line-scorer": {
+    id: "subject-line-scorer",
+    name: "Scorer de Assunto",
+    category: "Email",
+    description: "Nota para o assunto do email.",
+    icon: "📧",
+    inputs: ["subject"],
+    prompt: (d) => `Dê uma nota de 0 a 10 para este assunto de email: "${d.subject}".
+    Avalie: Tamanho, Curiosidade, Personalização e Clareza.
+    Reescreva 3 versões melhores focadas em taxa de abertura B2B.`,
+    schema: { score: "number", analysis: "string", better_options: "array" }
+  },
+  "unsubscribe-predictor": {
+    id: "unsubscribe-predictor",
+    name: "Preditivo de Unsubscribe",
+    category: "Email",
+    description: "Risco de descadastro.",
+    icon: "📉",
+    inputs: ["email_content"],
+    prompt: (d) => `Analise este conteúdo de email frio: "${d.email_content}".
+    Qual a probabilidade do lead clicar em 'Unsubscribe' ou marcar como spam?
+    Identifique se o tom é agressivo demais ou irrelevante.
+    Sugira uma frase de 'Opt-out' amigável que reduza denúncias.`,
+    schema: { risk_level: "string", reason: "string", friendly_opt_out: "string" }
+  },
+  "dmarc-spf-explainer": {
+    id: "dmarc-spf-explainer",
+    name: "Consultor Técnico de Email",
+    category: "Email",
+    description: "Explica config de DNS.",
+    icon: "🛠️",
+    inputs: ["domain"],
+    prompt: (d) => `Explique para um leigo como configurar SPF, DKIM e DMARC para o domínio ${d.domain}.
+    Gere os registros TXT de exemplo para um provedor padrão (Google/Outlook).
+    Explique por que isso aumenta a taxa de entrega na caixa de entrada.`,
+    schema: { explanation: "string", example_records: "object", importance: "string" }
+  },
+
+  // --- CATEGORIA 4: SOCIAL SELLING & BRAND ---
+  "linkedin-post-gen": {
+    id: "linkedin-post-gen",
+    name: "Gerador de Post Viral",
+    category: "Social",
+    description: "Cria conteúdo de autoridade.",
+    icon: "📝",
+    inputs: ["topic", "audience"],
+    prompt: (d) => `Crie um post para LinkedIn sobre "${d.topic}" focado no público "${d.audience}".
+    Use a estrutura: Gancho Polêmico + História Pessoal + Lição de Negócios + Pergunta Final.
+    O tom deve ser de liderança de pensamento (Thought Leadership). Use emojis moderados.`,
+    schema: { post_text: "string", hooks: "array", hashtags: "array" }
+  },
+  "social-comment-bot": {
+    id: "social-comment-bot",
+    name: "Gerador de Comentário",
+    category: "Social",
+    description: "Engajamento inteligente.",
+    icon: "💬",
+    inputs: ["post_content", "author_role"],
+    prompt: (d) => `Analise este post de um ${d.author_role}: "${d.post_content}".
+    Gere 2 comentários inteligentes que adicionem valor à discussão (não apenas 'Parabéns').
+    Um comentário deve fazer uma pergunta de aprofundamento e o outro deve trazer um dado complementar.`,
+    schema: { comment_question: "string", comment_insight: "string" }
+  },
+  "profile-optimizer": {
+    id: "profile-optimizer",
+    name: "Otimizador de Perfil",
+    category: "Social",
+    description: "Melhora sua bio para vender.",
+    icon: "✨",
+    inputs: ["current_bio", "target_audience"],
+    prompt: (d) => `Reescreva a Headline e o Sobre do LinkedIn baseados nesta bio atual: "${d.current_bio}".
+    O objetivo é atrair "${d.target_audience}".
+    A Headline deve focar em 'Como eu ajudo X a atingir Y'. O Sobre deve ser uma carta de vendas disfarçada de biografia.`,
+    schema: { headline: "string", about_section: "string", feedback: "string" }
+  },
+  "social-listening-alert": {
+    id: "social-listening-alert",
+    name: "Alerta de Monitoramento",
+    category: "Social",
+    description: "Keywords para seguir.",
+    icon: "🔔",
+    inputs: ["sector", "competitors"],
+    prompt: (d) => `Para vender no setor ${d.sector}, quais palavras-chave e hashtags eu devo monitorar no LinkedIn e Twitter?
+    Inclua variações de dor e nomes dos concorrentes: ${d.competitors}.
+    Explique o que procurar em cada monitoramento (Ex: Reclamação de preço, Dúvida técnica).`,
+    schema: { keywords: "array", hashtags: "array", signals_to_watch: "string" }
+  },
+  "influencer-finder": {
+    id: "influencer-finder",
+    name: "Buscador de Influenciadores",
+    category: "Social",
+    description: "Quem seu lead segue.",
+    icon: "🌟",
+    inputs: ["sector"],
+    prompt: (d) => `Liste 5 top voices ou influenciadores B2B no setor ${d.sector} que meus leads provavelmente seguem.
+    Para cada um, sugira um tema de post que eu poderia criar para 'surfar' na audiência deles ou marcá-los de forma inteligente.`,
+    schema: { influencers: "array", content_strategy: "string" }
+  },
+
+  // --- CATEGORIA 10: FECHAMENTO & NEGOCIAÇÃO ---
+  "discount-calculator": {
+    id: "discount-calculator",
+    name: "Calculadora de Desconto",
+    category: "Fechamento",
+    description: "Impacto na margem.",
+    icon: "📉",
+    inputs: ["deal_value", "margin", "requested_discount"],
+    prompt: (d) => `O cliente pediu ${d.requested_discount}% de desconto em um deal de ${d.deal_value} (Margem atual: ${d.margin}%).
+    Calcule o impacto no lucro real.
+    Gere 3 contrapropostas que NÃO dão desconto financeiro, mas oferecem valor em prazo, escopo ou bônus.`,
+    schema: { profit_impact: "string", counter_offers: "array", advice: "string" }
+  },
+  "contract-clause-gen": {
+    id: "contract-clause-gen",
+    name: "Gerador de Cláusula",
+    category: "Fechamento",
+    description: "Jurídico simples.",
+    icon: "📜",
+    inputs: ["topic", "condition"],
+    prompt: (d) => `Escreva uma cláusula contratual simples e justa sobre "${d.topic}" com a condição: "${d.condition}".
+    Evite juridiquês excessivo. O tom deve ser comercial e claro.
+    Exemplo de uso: Cláusula de rescisão, SLA ou Confidencialidade.`,
+    schema: { clause_text: "string", explanation: "string" }
+  },
+  "closing-technique": {
+    id: "closing-technique",
+    name: "Técnica de Fechamento",
+    category: "Fechamento",
+    description: "Qual o 'Close' ideal.",
+    icon: "🤝",
+    inputs: ["scenario", "objection"],
+    prompt: (d) => `Estamos no cenário: "${d.scenario}" e a última objeção foi "${d.objection}".
+    Qual técnica de fechamento devo usar? (Ex: Fechamento Presuntivo, Ou-Ou, Pergunta Invertida).
+    Gere o script exato da fala final para pegar a assinatura agora.`,
+    schema: { technique: "string", script: "string", why_it_works: "string" }
+  },
+  "fomo-generator": {
+    id: "fomo-generator",
+    name: "Gerador de FOMO",
+    category: "Fechamento",
+    description: "Urgência ética.",
+    icon: "⏳",
+    inputs: ["offer", "deadline"],
+    prompt: (d) => `Crie uma mensagem de urgência para a oferta "${d.offer}" que expira em ${d.deadline}.
+    Use o gatilho mental da Escassez ou Perda (FOMO) de forma ética.
+    Mostre o que ele perde se deixar para o próximo mês (Ex: Onboarding atrasado, Preço sobe).`,
+    schema: { urgency_message: "string", trigger_used: "string" }
+  },
+  "stakeholder-alignment": {
+    id: "stakeholder-alignment",
+    name: "Mapa de Alinhamento",
+    category: "Fechamento",
+    description: "Quem falta convencer.",
+    icon: "🗺️",
+    inputs: ["champion", "detractor", "decision_maker"],
+    prompt: (d) => `Temos um Campeão (${d.champion}), um Detrator (${d.detractor}) e o Decisor (${d.decision_maker}).
+    Gere um plano de xadrez: Como usar o Campeão para neutralizar o Detrator antes da reunião final com o Decisor?
+    Quais argumentos fornecer ao Campeão?`,
+    schema: { strategy: "string", arguments_for_champion: "array", risk_analysis: "string" }
+  },
+
   // --- CATEGORIA 5: COMPORTAMENTO E DECISÃO ---
   "lead-readiness": {
     id: "lead-readiness",
