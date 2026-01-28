@@ -97,7 +97,7 @@ const HunterAgent = {
 
                 // ETAPA 5: Ativação (Message Gen)
                 HunterAgent.updateStatus('ACTIVATING');
-                const message = HunterAgent.generateMessage(enrichedData);
+                const message = await HunterAgent.generateMessage(enrichedData);
                 enrichedData.activationMessage = message;
                 enrichedData.status = 'READY';
                 enrichedData.id = crypto.randomUUID();
@@ -107,7 +107,21 @@ const HunterAgent = {
                 HunterAgent.state.foundLeads.unshift(enrichedData);
 
                 // Add to main app data (Integration)
-                if (typeof groupsData !== 'undefined') {
+                // Use new useLeads hook if available (V6)
+                if (typeof window.useLeads !== 'undefined') {
+                    const group = {
+                        id: enrichedData.id,
+                        groupName: enrichedData.name,
+                        mainWebsite: enrichedData.website,
+                        score: enrichedData.score,
+                        status: 'new',
+                        tags: ['Auto-Hunter'],
+                        createdAt: new Date().toISOString(),
+                        coldMailHook: message // Saving the message
+                    };
+                    window.useLeads.addLead(group);
+                } else if (typeof groupsData !== 'undefined') {
+                    // Fallback for V4
                     const group = {
                         id: enrichedData.id,
                         groupName: enrichedData.name,
@@ -120,7 +134,7 @@ const HunterAgent = {
                     };
                     groupsData.unshift(group);
                     if(typeof dataStore !== 'undefined') dataStore.save();
-                    if(typeof renderGroups !== 'undefined') renderGroups(groupsData); // Refresh main view if visible
+                    if(typeof renderGroups !== 'undefined') renderGroups(groupsData);
                 }
 
                 HunterAgent.renderOpportunity(enrichedData);
@@ -147,8 +161,25 @@ const HunterAgent = {
         return `${prefixes[Math.floor(Math.random() * prefixes.length)]} ${suffixes[Math.floor(Math.random() * suffixes.length)]}`;
     },
 
-    generateMessage: (lead) => {
-        // Modelo 8: Mensagem Gerada
+    generateMessage: async (lead) => {
+        // V6: Use Advanced Tools if available, otherwise fallback
+        if(typeof window.ADVANCED_TOOLS !== 'undefined' && window.ADVANCED_TOOLS['ice-breaker']) {
+             try {
+                 const result = await window.AIEngine.runTool('ice-breaker', {
+                     name: "Lead", // Generic name if missing
+                     role: "Decisor",
+                     company: lead.name,
+                     news: "Crescimento recente no setor " + lead.segment
+                 });
+                 if(result && result.options && result.options[0]) {
+                     return `Olá! ${result.options[0]}\n\nNotei que vocês enfrentam desafios com ${lead.painPoints[0]}. Podemos ajudar. Vamos conversar?`;
+                 }
+             } catch(e) {
+                 console.warn("Agent failed to use tool, falling back to template.");
+             }
+        }
+
+        // Fallback Template
         return `Olá, tudo bem?
 
 Analisei o posicionamento da ${lead.name} e notei que vocês estão em um momento de crescimento que costuma gerar gargalos em ${lead.painPoints[0].toLowerCase()}.

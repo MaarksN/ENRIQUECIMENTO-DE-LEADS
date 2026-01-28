@@ -47,6 +47,9 @@
                 <a href="#" data-section="agent" class="nav-item flex items-center px-4 py-3 text-sm font-medium rounded-xl text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 transition-colors group mt-4 border border-emerald-100">
                     <span class="text-xl mr-3 group-hover:scale-110 transition-transform">🤖</span> Hunter AI
                 </a>
+                <a href="#" data-section="tools" class="nav-item flex items-center px-4 py-3 text-sm font-medium rounded-xl text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors group">
+                    <span class="text-xl mr-3 group-hover:scale-110 transition-transform">🧰</span> Ferramentas IA
+                </a>
             </nav>
 
             <div class="p-4 border-t border-slate-100 space-y-3">
@@ -246,6 +249,25 @@
                     </div>
                 </section>
 
+                <!-- SECTION: TOOLS DASHBOARD -->
+                <section id="section-tools" class="hidden space-y-6 animate-fade-in">
+                    <div class="glass-card p-6 rounded-2xl">
+                        <h3 class="font-bold text-lg text-slate-800 mb-4">🧰 Ferramentas de IA Avançadas</h3>
+                        <p class="text-slate-500 text-sm mb-6">Selecione uma ferramenta para executar tarefas especializadas de prospecção e vendas.</p>
+
+                        <!-- Categories Filter -->
+                        <div class="flex gap-2 mb-6 overflow-x-auto pb-2" id="tools-categories">
+                            <button class="px-4 py-2 bg-indigo-600 text-white rounded-full text-xs font-bold shadow-md">Todas</button>
+                            <!-- Dynamic Categories -->
+                        </div>
+
+                        <!-- Tools Grid -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="tools-grid">
+                            <!-- Tool Cards Injected Here -->
+                        </div>
+                    </div>
+                </section>
+
                 <!-- SECTION: HUNTER AGENT -->
                 <section id="section-agent" class="hidden space-y-6 animate-fade-in">
                     <!-- Control Center -->
@@ -432,6 +454,7 @@
 
     <!-- Scripts -->
     <script src="security.js"></script>
+    <script src="tools.config.js"></script>
     <script src="supabaseClient.js"></script>
     <script src="agent.js"></script>
     <script src="script.js"></script>
@@ -465,7 +488,8 @@
                     'search': 'Busca Avançada & Mapas',
                     'directory': 'Diretório de Leads',
                     'cadence': 'Gestão de Cadência',
-                    'agent': 'Hunter AI - Agente Autônomo'
+                    'agent': 'Hunter AI - Agente Autônomo',
+                    'tools': 'Ferramentas de IA'
                 };
                 document.getElementById('page-title').textContent = titles[sectionId];
             });

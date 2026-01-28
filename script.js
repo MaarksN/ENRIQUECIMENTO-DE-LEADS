@@ -115,7 +115,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Legacy variables mapped to Store for compatibility
     let groupsData = [];
     // We update groupsData whenever store changes to keep legacy render functions working
-    store.subscribe((state) => { groupsData = state.leads; });
+    store.subscribe((state) => {
+        groupsData = state.leads;
+        window.groupsData = groupsData; // Expose for verification scripts
+        renderGroups(groupsData); // Force render on state change to ensure UI reflects data immediately
+    });
+    // Ensure window.groupsData is initialized empty too
+    window.groupsData = groupsData;
 
     const useLeads = {
         fetchLeads: async () => {
@@ -150,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }));
 
             store.setState({ leads: mappedLeads });
-            renderGroups(mappedLeads);
+            // renderGroups is now called via subscription
         },
 
         addLead: async (leadData) => {
@@ -177,7 +183,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const { data, error } = await window.supabase.from('leads').insert(dbRow);
             if (!error) {
                 // Refresh local state optimistically or re-fetch
-                useLeads.fetchLeads();
+                // Critical Fix: await fetchLeads to ensure UI updates before resolving
+                await useLeads.fetchLeads();
             }
         },
 
@@ -220,6 +227,29 @@ document.addEventListener('DOMContentLoaded', () => {
             // Call Real API (or Mock) via "Edge"
             // In a real scenario, this 'callAIApi' would fetch the Edge Function URL, not the external API directly
             return await callAIApi('gemini', finalPrompt);
+        },
+
+        // Run Specific Tool (V6 Feature)
+        runTool: async (toolId, data) => {
+            const tool = window.ADVANCED_TOOLS[toolId];
+            if (!tool) throw new Error("Ferramenta não encontrada: " + toolId);
+
+            console.log(`[Edge] Running Tool: ${tool.name}`, data);
+
+            // Construct Prompt dynamically
+            const prompt = tool.prompt(data);
+
+            // Pass Schema if available to guide JSON output
+            // Note: simpleMockAIApi might not handle schema perfectly, but we simulate it
+            const result = await EdgeFunctions.callGemini(prompt + "\n\nRetorne APENAS um JSON válido seguindo este schema: " + JSON.stringify(tool.schema));
+
+            try {
+                // Try to parse if it's a string, assuming the AI obeyed
+                return typeof result === 'string' ? JSON.parse(result.replace(/```json/g, '').replace(/```/g, '')) : result;
+            } catch (e) {
+                console.warn("AI didn't return perfect JSON, returning raw text", e);
+                return result;
+            }
         },
 
         // Item 11 & 20: Integrations & Webhooks
@@ -504,11 +534,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Filter Logic (Item 22, 25)
         let filtered = groups.filter(g => {
             // Archive Filter
-            if (showArchived) { if (!g.archived) return false; }
+            if (typeof showArchived !== 'undefined' && showArchived) { if (!g.archived) return false; }
             else { if (g.archived) return false; }
 
             // Date Filter
-            if (filterStartDate || filterEndDate) {
+            if ((typeof filterStartDate !== 'undefined' && filterStartDate) || (typeof filterEndDate !== 'undefined' && filterEndDate)) {
                 const date = new Date(g.createdAt).getTime();
                 const start = filterStartDate ? new Date(filterStartDate).getTime() : 0;
                 const end = filterEndDate ? new Date(filterEndDate).getTime() : Infinity;
@@ -521,7 +551,9 @@ document.addEventListener('DOMContentLoaded', () => {
         filtered.sort((a, b) => {
             const scoreA = a.score || 0;
             const scoreB = b.score || 0;
-            return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
+            // Defensive sortOrder check
+            const order = (typeof sortOrder !== 'undefined') ? sortOrder : 'desc';
+            return order === 'desc' ? scoreB - scoreA : scoreA - scoreB;
         });
 
         // Update Dashboard KPIs
@@ -530,7 +562,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (filtered.length === 0) { ui.groupGrid.innerHTML = `<p class="text-slate-500 col-span-full text-center py-10">Nenhum lead encontrado com os filtros atuais.</p>`; return; }
 
-        if (currentViewMode === 'kanban') {
+        // Defensive: Check currentViewMode
+        const viewMode = (typeof currentViewMode !== 'undefined') ? currentViewMode : 'list';
+
+        if (viewMode === 'kanban') {
             ui.groupGrid.classList.remove('grid', 'grid-cols-1', 'sm:grid-cols-2', 'xl:grid-cols-3', '2xl:grid-cols-4');
             ui.groupGrid.classList.add('flex', 'overflow-x-auto', 'gap-6', 'pb-4');
 
@@ -1323,11 +1358,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        groupsData.unshift(newGroup);
+        useLeads.addLead(newGroup);
         SecurityManager.logAction('ADD_LEAD', `Added lead from AI Search: ${newGroup.groupName}`);
-        dataStore.save();
-        renderGroups(groupsData);
-        prepareChartData();
+
         showToast(`Grupo "${newGroup.groupName}" adicionado!`, false);
     };
 
@@ -1347,11 +1380,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Este grupo já existe no diretório.', true); return;
         }
 
-        groupsData.unshift(newGroup);
+        useLeads.addLead(newGroup);
         SecurityManager.logAction('ADD_LEAD', `Manually added lead: ${name}`);
-        dataStore.save();
-        renderGroups(groupsData);
-        prepareChartData();
+
         showToast(`Grupo "${name}" adicionado com sucesso!`);
         
         document.getElementById('manual-name').value = '';
@@ -1377,7 +1408,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const handleSessionRestored = (session) => {
+    const handleSessionRestored = async (session) => {
         ui.loginModal.classList.add('hidden');
         const user = session.user;
 
@@ -1386,8 +1417,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if(ui.userRoleDisplay) ui.userRoleDisplay.textContent = user.role;
 
         // Fetch Data
-        useLeads.fetchLeads();
-        prepareChartData(); // Note: chart data might be empty initially until fetch completes
+        await useLeads.fetchLeads();
+        prepareChartData();
         renderCalendar(new Date().getFullYear(), new Date().getMonth());
 
         UIUtils.showToast(`Sessão restaurada: ${user.email}`);
@@ -1658,11 +1689,118 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     if(ui.modalContainer) ui.modalContainer.addEventListener('click', (e) => { if(e.target === ui.modalContainer) { closeModal(); } });
-
-    // Backup/Restore buttons are currently not in UI, skipping listeners
-    // if(ui.backupBtn) ui.backupBtn.addEventListener('click', dataStore.backup);
-    // if(ui.restoreInput) ui.restoreInput.addEventListener('change', (e) => dataStore.restore(e.target.files[0]));
     
+    // Tools UI Logic (V6)
+    const renderToolsUI = () => {
+        const grid = document.getElementById('tools-grid');
+        const categoriesContainer = document.getElementById('tools-categories');
+        if(!grid || !categoriesContainer) return;
+
+        const tools = Object.values(window.ADVANCED_TOOLS);
+        const categories = [...new Set(tools.map(t => t.category))];
+
+        // Categories
+        categoriesContainer.innerHTML = `<button class="px-4 py-2 bg-indigo-600 text-white rounded-full text-xs font-bold shadow-md hover:bg-indigo-700 transition-colors" onclick="filterTools('all')">Todas</button>` +
+            categories.map(cat => `<button class="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-full text-xs font-bold shadow-sm hover:bg-slate-50 transition-colors" onclick="filterTools('${cat}')">${cat}</button>`).join('');
+
+        // Grid
+        grid.innerHTML = tools.map(tool => `
+            <div class="glass-card p-5 rounded-xl border border-slate-200 hover:border-indigo-300 transition-all cursor-pointer group" data-category="${tool.category}" onclick="openToolModal('${tool.id}')">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">${tool.icon}</div>
+                    <span class="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">${tool.category}</span>
+                </div>
+                <h4 class="font-bold text-slate-800 mb-1">${tool.name}</h4>
+                <p class="text-xs text-slate-500 line-clamp-2">${tool.description}</p>
+            </div>
+        `).join('');
+    };
+
+    window.filterTools = (category) => {
+        const cards = document.querySelectorAll('#tools-grid > div');
+        cards.forEach(card => {
+            if(category === 'all' || card.dataset.category === category) {
+                card.style.display = 'block';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    };
+
+    window.openToolModal = (toolId) => {
+        const tool = window.ADVANCED_TOOLS[toolId];
+        if(!tool) return;
+
+        ui.modalContent.innerHTML = `
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-2xl">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">${tool.icon}</span>
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-900">${tool.name}</h2>
+                        <p class="text-xs text-slate-500">${tool.category}</p>
+                    </div>
+                </div>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-200 transition-all">✕</button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-slate-600 mb-6 bg-blue-50 p-3 rounded-lg border border-blue-100">ℹ️ ${tool.description}</p>
+
+                <div class="space-y-4 mb-6" id="tool-inputs">
+                    ${tool.inputs.map(input => `
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">${input}</label>
+                            <input type="text" id="input-${input}" class="block w-full rounded-lg border-slate-200 bg-white py-2.5 text-sm focus:ring-2 focus:ring-indigo-500" placeholder="Digite ${input}...">
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="flex justify-end">
+                    <button id="run-tool-btn" class="bg-indigo-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2">
+                        <span>✨ Executar IA</span>
+                    </button>
+                </div>
+
+                <div id="tool-result" class="mt-6 hidden">
+                    <h4 class="font-bold text-sm text-slate-800 mb-2">Resultado:</h4>
+                    <div class="bg-slate-900 text-green-400 font-mono text-xs p-4 rounded-lg overflow-x-auto" id="tool-output"></div>
+                </div>
+            </div>
+        `;
+
+        ui.modalContainer.classList.remove('hidden');
+        ui.modalContainer.classList.add('flex');
+
+        document.getElementById('run-tool-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('run-tool-btn');
+            const resultDiv = document.getElementById('tool-result');
+            const output = document.getElementById('tool-output');
+
+            // Gather Data
+            const data = {};
+            tool.inputs.forEach(key => {
+                data[key] = document.getElementById(`input-${key}`).value;
+            });
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader-dark"></div> Processando...';
+
+            try {
+                const response = await AIEngine.runTool(toolId, data);
+                resultDiv.classList.remove('hidden');
+                output.textContent = JSON.stringify(response, null, 2);
+                UIUtils.showToast("Ferramenta executada com sucesso!");
+            } catch(e) {
+                UIUtils.showToast("Erro: " + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>✨ Executar IA</span>';
+            }
+        });
+    };
+
+    // Initialize Tools UI
+    renderToolsUI();
+
     setupTabs('#lead-management-tabs .tab-button', '.dashboard-card .tab-content');
 
     const createChart = (canvasId, type, data, options) => {
@@ -1919,4 +2057,5 @@ document.addEventListener('DOMContentLoaded', () => {
     window.UIUtils = UIUtils;
     window.AIEngine = AIEngine;
     window.DataAcquisition = DataAcquisition;
+    window.useLeads = useLeads;
 });

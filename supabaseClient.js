@@ -23,6 +23,9 @@ class MockSupabase {
     }
 
     _saveDB() {
+        console.log("Saving DB to LocalStorage:", this.db);
+        console.log("Saving DB to LocalStorage:", this.db);
+        // Force synchronous save for test stability in mock environment
         localStorage.setItem(this.storageKey, JSON.stringify(this.db));
     }
 
@@ -156,6 +159,9 @@ class QueryBuilder {
     }
 
     async insert(data) {
+        // Simulate Network Latency
+        await new Promise(r => setTimeout(r, 100));
+
         const rows = Array.isArray(data) ? data : [data];
         const newRows = rows.map(r => ({
             ...r,
@@ -167,6 +173,7 @@ class QueryBuilder {
         this.client.db[this.table].push(...newRows);
         this.client._saveDB();
 
+        // Return object structure matching real Supabase insert response
         return { data: newRows, error: null };
     }
 
