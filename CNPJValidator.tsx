@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Icons } from '../constants';
+import { Icons } from './constants';
 
 const CNPJValidator: React.FC = () => {
   const [cnpj, setCnpj] = useState('');

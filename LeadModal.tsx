@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Lead } from '../types';
-import { enrichDecisionMakers, generateSalesKit, analyzeCompetitors, checkLocationData } from '../services/geminiService';
-import { Icons } from '../constants';
+import { Lead } from './types';
+import { enrichDecisionMakers, generateSalesKit, analyzeCompetitors, checkLocationData } from './geminiService';
+import { Icons } from './constants';
 
 interface LeadModalProps {
   lead: Lead;

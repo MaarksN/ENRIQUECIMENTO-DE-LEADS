@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { Lead, SalesKit, Competitor, DecisionMaker } from '../types';
+import { Lead, SalesKit, Competitor, DecisionMaker } from './types';
 
 // Initialize Gemini Client
 // IMPORTANT: We use a new instance for every major call in the UI to ensure fresh config/keys if needed, 
@@ -382,3 +382,56 @@ export const analyzeVisualContent = async (base64Data: string, mimeType: string,
         return "Erro na análise visual.";
     }
 }
+
+/**
+ * 🚀 MOTOR DE EXECUÇÃO DAS 100 FERRAMENTAS
+ * Esta função é genérica: ela roda qualquer ferramenta do Registry.
+ */
+export const executeAITool = async (
+  promptTemplate: string,
+  inputs: Record<string, string>,
+  systemRole: string = 'Assistente de Vendas de Alta Performance'
+): Promise<string | null> => {
+  try {
+    // 1. Interpolação de Variáveis (O "Search & Replace" inteligente)
+    // Substitui {{empresa}} pelo valor real, ex: "Petrobras"
+    let finalPrompt = promptTemplate;
+    Object.keys(inputs).forEach(key => {
+      // Cria uma regex global para substituir todas as ocorrências
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      finalPrompt = finalPrompt.replace(regex, inputs[key] || '');
+    });
+
+    // 2. Instancia um novo cliente para garantir que pegue a API Key mais recente (se o usuário trocou)
+    // Nota: window.aistudio é um hack específico se você estiver usando o AI Studio no navegador,
+    // caso contrário, usa a env var padrão.
+    const apiKey = process.env.API_KEY || localStorage.getItem('gemini_api_key') || '';
+    if (!apiKey && !(window as any).aistudio) {
+        // Warning: in a real app we might want to handle this better, but for now we assume environment or localStorage
+        // throw new Error("Chave de API não configurada.");
+    }
+
+    const freshAi = new GoogleGenAI({ apiKey });
+
+    // 3. Chamada à API (Usando Gemini 2.0 Flash para velocidade ou Pro se precisar de raciocínio)
+    // O Flash é ideal para ferramentas de texto rápidas.
+    const response = await freshAi.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [
+        {
+            role: 'user',
+            parts: [{ text: `SYSTEM ROLE: ${systemRole}\n\n--- TAREFA ---\n${finalPrompt}` }]
+        }
+      ],
+      config: {
+        temperature: 0.7, // Criatividade balanceada
+      }
+    });
+
+    return response.text();
+
+  } catch (error: any) {
+    console.error("Tool Execution Error:", error);
+    throw new Error(error.message || "Falha ao executar a ferramenta de IA.");
+  }
+};

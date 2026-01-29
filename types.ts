@@ -66,3 +66,26 @@ export interface DashboardStats {
   conversionRate: number;
   projectedRevenue: number;
 }
+
+// --- NOVOS TIPOS PARA O TOOLS HUB ---
+
+export type ToolCategory = 'prospecting' | 'enrichment' | 'copywriting' | 'strategy' | 'closing';
+
+export interface ToolInput {
+  name: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'select';
+  options?: string[]; // Apenas para inputs do tipo 'select'
+  placeholder?: string;
+}
+
+export interface AIToolConfig {
+  id: string;
+  name: string;
+  description: string;
+  category: ToolCategory;
+  inputs: ToolInput[];
+  promptTemplate: string; // O template com variáveis {{variavel}}
+  systemRole?: string;    // A "persona" da IA (ex: "Senior Copywriter")
+  outputFormat?: 'json' | 'markdown' | 'text';
+}
